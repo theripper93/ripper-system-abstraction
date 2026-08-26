@@ -105,12 +105,14 @@ export const systems = {
   worldbuilding: worldbuildingPaths,
 };
 
-const { DataModel, fields } = foundry.abstract;
+const { DataModel } = foundry.abstract;
+const fields = foundry.data.fields;
 
 class DefaultFormulaInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Formula",
         required: true,
         blank: false,
       }),
@@ -122,6 +124,7 @@ class DefaultDCInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.NumberField({
+        label: "DC",
         required: false,
         nullable: true,
         integer: true,
@@ -131,7 +134,7 @@ class DefaultDCInput extends DataModel {
   }
 }
 
-const defaultTestsInterface = {
+export const defaultTestsInterface = {
   buildInputs: () => ({
     formula: DefaultFormulaInput,
     dc: DefaultDCInput,

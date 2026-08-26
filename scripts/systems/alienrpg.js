@@ -1,4 +1,5 @@
-const { DataModel, fields } = foundry.abstract;
+const { DataModel } = foundry.abstract;
+const fields = foundry.data.fields;
 
 export const dataPaths = {
   actor: {
@@ -81,6 +82,7 @@ class AlienRPGModifierInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.NumberField({
+        label: "Modifier",
         required: false,
         nullable: true,
         integer: true,
@@ -105,6 +107,7 @@ export const testsInterface = {
       static defineSchema() {
         return {
           value: new fields.StringField({
+            label: "Check",
             required: true,
             choices,
           }),

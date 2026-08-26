@@ -1,4 +1,5 @@
-const { DataModel, fields } = foundry.abstract;
+const { DataModel } = foundry.abstract;
+const fields = foundry.data.fields;
 
 export const dataPaths = {
   actor: {
@@ -97,6 +98,7 @@ export const testsInterface = {
       static defineSchema() {
         return {
           value: new fields.StringField({
+            label: "Check",
             required: true,
             choices,
           }),
