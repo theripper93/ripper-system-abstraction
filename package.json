@@ -22,7 +22,6 @@
   },
   "scripts": {
     "translate": "node translate-all.js",
-    "init": "npm install && node init-project.js && npx webpack --config webpack.config.js --watch",
     "create": "node createApp.js",
     "watch": "npx webpack --config webpack.config.js --watch"
   }

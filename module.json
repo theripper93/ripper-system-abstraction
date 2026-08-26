@@ -1,7 +1,7 @@
 {
-  "title": "module-name",
+  "title": "Ripper System Abstraction",
   "description": "desc",
-  "id": "module-id",
+  "id": "ripper-system-abstraction",
   "version": "1.0",
   "authors": [
     {
@@ -115,8 +115,8 @@
     "styles/module.css"
   ],
   "packs": [],
-  "url": "https://github.com/theripper93/module-id",
-  "manifest": "https://github.com/theripper93/module-id/releases/latest/download/module.json",
+  "url": "https://github.com/theripper93/ripper-system-abstraction",
+  "manifest": "https://github.com/theripper93/ripper-system-abstraction/releases/latest/download/module.json",
   "download": "",
   "relationships": {
     "requires": [
