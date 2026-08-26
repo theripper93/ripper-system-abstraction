@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "",
@@ -71,5 +73,67 @@ export const dataPaths = {
     supportsCurrency: true,
     supportsWeight: false,
     supportsEquipment: true,
+  },
+};
+
+class DemonlordCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+class DemonlordModifierInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.NumberField({
+        required: false,
+        nullable: true,
+        integer: true,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: (actor) => {
+    const choices = {};
+
+    for (const [key, attribute] of Object.entries(
+      actor.system.attributes ?? {},
+    )) {
+      choices[key] = game.i18n.localize(attribute.label ?? key);
+    }
+
+    class CheckInput extends DemonlordCheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+      modifier: DemonlordModifierInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const attribute = actor.getAttribute(inputs.check);
+    if (!attribute) throw new Error(`Unknown Demon Lord attribute: ${inputs.check}`);
+
+    return actor.rollAttributeChallenge(
+      attribute,
+      undefined,
+      inputs.modifier ?? 0,
+    );
   },
 };

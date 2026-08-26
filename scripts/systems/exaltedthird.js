@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "details.exalt",
@@ -61,5 +63,68 @@ export const dataPaths = {
     supportsCurrency: false,
     supportsWeight: false,
     supportsEquipment: true,
+  },
+};
+
+class ExaltedThirdCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+class ExaltedThirdDifficultyInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.NumberField({
+        required: false,
+        nullable: true,
+        integer: true,
+        min: 0,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: () => {
+    const choices = {};
+
+    for (const [key, label] of Object.entries(
+      CONFIG.exaltedthird.selects.abilities.entries,
+    )) {
+      choices[key] = game.i18n.localize(label);
+    }
+
+    class CheckInput extends ExaltedThirdCheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+      difficulty: ExaltedThirdDifficultyInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const data = {
+      rollType: "ability",
+      ability: inputs.check,
+      attribute: actor.system.abilities[inputs.check]?.prefattribute,
+      difficulty: inputs.difficulty ?? 0,
+    };
+
+    return game.exaltedthird.roll(actor, {}, data);
   },
 };

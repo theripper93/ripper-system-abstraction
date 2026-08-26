@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "",
@@ -65,5 +67,82 @@ export const dataPaths = {
     supportsCurrency: true,
     supportsWeight: true,
     supportsEquipment: true,
+  },
+};
+
+class FalloutCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: (actor) => {
+    const choices = {};
+
+    for (const [key, label] of Object.entries(CONFIG.FALLOUT.ATTRIBUTES)) {
+      choices[`attribute.${key}`] = game.i18n.localize(label);
+    }
+
+    for (const item of actor.items.filter((i) => i.type === "skill")) {
+      choices[`skill.${item.name}`] = item.name;
+    }
+
+    class CheckInput extends FalloutCheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const [type, key] = inputs.check.split(".");
+    const complication = parseInt(actor.system.complication) || 20;
+
+    if (type === "attribute") {
+      return fallout.Roller2D20.rollD20({
+        actor,
+        rollname: game.i18n.localize(CONFIG.FALLOUT.ATTRIBUTES[key]),
+        dicenum: 2,
+        attribute: actor.system.attributes[key]?.value ?? 0,
+        skill: 0,
+        tag: false,
+        complication,
+      });
+    }
+
+    if (type === "skill") {
+      const skill = actor.items.find(
+        (i) => i.type === "skill" && i.name === key,
+      );
+      if (!skill) throw new Error(`Unknown Fallout skill: ${key}`);
+
+      return fallout.Roller2D20.rollD20({
+        actor,
+        rollname: skill.name,
+        dicenum: 2,
+        attribute:
+          actor.system.attributes[skill.system.defaultAttribute]?.value ?? 0,
+        skill: skill.system.value ?? 0,
+        tag: skill.system.tag ?? false,
+        complication,
+      });
+    }
+
+    throw new Error(`Unsupported Fallout check type: ${type}`);
   },
 };

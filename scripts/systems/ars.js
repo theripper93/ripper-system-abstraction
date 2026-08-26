@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "",
@@ -73,5 +75,75 @@ export const dataPaths = {
     supportsCurrency: true,
     supportsWeight: true,
     supportsEquipment: true,
+  },
+};
+
+class ARSCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: (actor) => {
+    const choices = {};
+
+    for (const [key, label] of Object.entries(CONFIG.ARS.abilityTypes)) {
+      if (key === "none") continue;
+      choices[`ability.${key}`] = game.i18n.localize(label);
+    }
+
+    for (const [key, label] of Object.entries(CONFIG.ARS.saveTypes)) {
+      if (key === "none") continue;
+      choices[`save.${key}`] = game.i18n.localize(label);
+    }
+
+    for (const item of actor.items.filter((i) => i.type === "skill")) {
+      choices[`skill.${item.name}`] = item.name;
+    }
+
+    class CheckInput extends ARSCheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const [type, key] = inputs.check.split(".");
+
+    switch (type) {
+      case "ability":
+        return new game.ars.ARSDice(actor).makeAbilityCheckRollAsync(key, "d20");
+
+      case "save":
+        return new game.ars.ARSDice(actor).makeSaveRollAsync(key);
+
+      case "skill": {
+        const skill = actor.items.find(
+          (i) => i.type === "skill" && (i.id === key || i.name === key),
+        );
+        if (!skill) throw new Error(`Unknown ARS skill: ${key}`);
+
+        return new game.ars.ARSDice(actor, skill).makeSkillRoll(true);
+      }
+
+      default:
+        throw new Error(`Unsupported ARS check type: ${type}`);
+    }
   },
 };

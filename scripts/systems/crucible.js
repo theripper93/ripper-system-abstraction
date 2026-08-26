@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "",
@@ -66,5 +68,62 @@ export const dataPaths = {
     supportsCurrency: true,
     supportsWeight: true,
     supportsEquipment: true,
+  },
+};
+
+class CrucibleCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+class CrucibleDCInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.NumberField({
+        required: false,
+        nullable: true,
+        integer: true,
+        min: 0,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: () => {
+    const choices = {};
+
+    for (const skill of globalThis.SYSTEM?.SKILLS ?? []) {
+      choices[skill.id] = game.i18n.localize(skill.label);
+    }
+
+    class CheckInput extends CrucibleCheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+      dc: CrucibleDCInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    return actor.rollSkill(inputs.check, {
+      dc: inputs.dc,
+      chatMessage: true,
+    });
   },
 };

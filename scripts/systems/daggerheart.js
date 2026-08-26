@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "",
@@ -71,5 +73,69 @@ export const dataPaths = {
     supportsCurrency: true,
     supportsWeight: false,
     supportsEquipment: true,
+  },
+};
+
+class DaggerheartCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+class DaggerheartDifficultyInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.NumberField({
+        required: false,
+        nullable: true,
+        integer: true,
+        min: 0,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: () => {
+    const choices = {};
+
+    for (const [key, value] of Object.entries(CONFIG.DH.ACTOR.abilities)) {
+      choices[key] = game.i18n.localize(value.label);
+    }
+
+    class CheckInput extends DaggerheartCheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+      difficulty: DaggerheartDifficultyInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const options = { dialog: { configure: false } };
+
+    if (inputs.difficulty != null) {
+      options.roll = {
+        trait: inputs.check,
+        type: "trait",
+        difficulty: inputs.difficulty,
+      };
+    }
+
+    return actor.rollTrait(inputs.check, options);
   },
 };

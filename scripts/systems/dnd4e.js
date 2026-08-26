@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "",
@@ -73,5 +75,75 @@ export const dataPaths = {
     supportsCurrency: true,
     supportsWeight: true,
     supportsEquipment: true,
+  },
+};
+
+class DND4ECheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+class DND4EDCInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.NumberField({
+        required: false,
+        nullable: true,
+        integer: true,
+        min: 0,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: () => {
+    const choices = {};
+
+    for (const [key, value] of Object.entries(CONFIG.DND4E.abilities)) {
+      choices[`ability.${key}`] = value;
+    }
+
+    for (const [key, value] of Object.entries(CONFIG.DND4E.skills)) {
+      choices[`skill.${key}`] = value.label;
+    }
+
+    class CheckInput extends DND4ECheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+      dc: DND4EDCInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const [type, key] = inputs.check.split(".");
+    const options = inputs.dc != null ? { dc: inputs.dc } : {};
+
+    switch (type) {
+      case "skill":
+        return actor.rollSkill(key, options);
+
+      case "ability":
+        return actor.rollAbility(key, options);
+
+      default:
+        throw new Error(`Unsupported D&D 4e check type: ${type}`);
+    }
   },
 };

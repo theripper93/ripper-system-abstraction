@@ -173,9 +173,7 @@ export const testsInterface = {
 
       case "save":
         if (key === "death") {
-          return actor.rollDeathSave({
-            legacy: false,
-          });
+          return actor.rollDeathSave();
         }
 
         return actor.rollSavingThrow({

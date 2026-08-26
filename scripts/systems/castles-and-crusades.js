@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "type.value",
@@ -71,5 +73,92 @@ export const dataPaths = {
     supportsCurrency: true,
     supportsWeight: true,
     supportsEquipment: true,
+  },
+};
+
+class CastlesAndCrusadesCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+class CastlesAndCrusadesChallengeLevelInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.NumberField({
+        required: false,
+        nullable: true,
+        integer: true,
+        min: 0,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: () => {
+    const choices = {};
+
+    for (const [key, label] of Object.entries(CONFIG.TLGCC.abilities)) {
+      choices[key] = game.i18n.localize(label);
+    }
+
+    class CheckInput extends CastlesAndCrusadesCheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+      dc: CastlesAndCrusadesChallengeLevelInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const data = actor.getRollData();
+    const ability = data.abilities?.[inputs.check];
+    if (!ability) throw new Error(`Unknown C&C ability: ${inputs.check}`);
+
+    const roll = await new Roll(
+      `1d20 + ${ability.bonus ?? 0} + ${data.level?.value ?? 0}`,
+      data,
+    ).evaluate();
+
+    const isPrime = Boolean(ability.ccprimary);
+    const base = isPrime
+      ? game.settings.get("castles-and-crusades", "primeSiegeChallengeBase") ??
+        12
+      : game.settings.get(
+          "castles-and-crusades",
+          "secondarySiegeChallengeBase",
+        ) ?? 18;
+    const challengeClass = base + (inputs.dc ?? 0);
+
+    await roll.toMessage({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      flavor: game.i18n.format("TLGCC.SiegeCheck", {
+        ability: game.i18n.localize(
+          `TLGCC.Ability${inputs.check.capitalize()}`,
+        ),
+        cc: challengeClass,
+      }),
+    });
+
+    return {
+      roll,
+      challengeClass,
+      success: roll.total >= challengeClass,
+    };
   },
 };

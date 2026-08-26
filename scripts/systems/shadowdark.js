@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "",
@@ -73,5 +75,62 @@ export const dataPaths = {
     supportsCurrency: true,
     supportsWeight: true,
     supportsEquipment: true,
+  },
+};
+
+class ShadowdarkCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+class ShadowdarkDCInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.NumberField({
+        required: false,
+        nullable: true,
+        integer: true,
+        min: 0,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: () => {
+    const choices = {};
+
+    for (const key of CONFIG.SHADOWDARK.ABILITY_KEYS) {
+      choices[key] = game.i18n.localize(CONFIG.SHADOWDARK.ABILITIES_LONG[key]);
+    }
+
+    class CheckInput extends ShadowdarkCheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+      dc: ShadowdarkDCInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const config = { skipPrompt: true };
+    if (inputs.dc != null) config.mainRoll = { dc: inputs.dc };
+
+    return actor.system.rollStatCheck(inputs.check, config);
   },
 };

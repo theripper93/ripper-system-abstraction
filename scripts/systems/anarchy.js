@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "",
@@ -61,5 +63,68 @@ export const dataPaths = {
     supportsCurrency: false,
     supportsWeight: false,
     supportsEquipment: false,
+  },
+};
+
+class AnarchyCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: (actor) => {
+    const choices = {};
+
+    for (const key of Object.keys(actor.system.attributes ?? {})) {
+      choices[`attribute.${key}`] = game.i18n.localize(key);
+    }
+
+    for (const item of actor.items.filter((i) => i.type === "skill")) {
+      choices[`skill.${item.name}`] = item.name;
+    }
+
+    class CheckInput extends AnarchyCheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const [type, key] = inputs.check.split(":");
+
+    switch (type) {
+      case "attribute":
+        return actor.rollAttribute(key);
+
+      case "skill": {
+        const item = actor.items.find(
+          (i) =>
+            i.type === "skill" &&
+            (i.system.code === key || i.name === key),
+        );
+        if (!item) throw new Error(`Unknown Anarchy skill: ${key}`);
+
+        return actor.rollSkill(item);
+      }
+
+      default:
+        throw new Error(`Unsupported Anarchy check type: ${type}`);
+    }
   },
 };

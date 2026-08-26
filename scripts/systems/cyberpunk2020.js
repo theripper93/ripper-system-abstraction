@@ -1,3 +1,5 @@
+const { DataModel, fields } = foundry.abstract;
+
 export const dataPaths = {
   actor: {
     type: "",
@@ -65,5 +67,81 @@ export const dataPaths = {
     supportsCurrency: true,
     supportsWeight: true,
     supportsEquipment: true,
+  },
+};
+
+class Cyberpunk2020CheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        required: true,
+        choices,
+      }),
+    };
+  }
+}
+
+class Cyberpunk2020ModifierInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.NumberField({
+        required: false,
+        nullable: true,
+        integer: true,
+      }),
+    };
+  }
+}
+
+export const testsInterface = {
+  buildInputs: (actor) => {
+    const choices = {};
+
+    for (const [key] of Object.entries(actor.system.stats ?? {})) {
+      choices[`stat.${key}`] = game.i18n.localize(
+        `CYBERPUNK.${key.capitalize()}Full`,
+      );
+    }
+
+    for (const item of actor.items.filter((i) => i.type === "skill")) {
+      choices[`skill.${item.id}`] = item.name;
+    }
+
+    class CheckInput extends Cyberpunk2020CheckInput {
+      static defineSchema() {
+        return {
+          value: new fields.StringField({
+            required: true,
+            choices,
+          }),
+        };
+      }
+    }
+
+    return {
+      check: CheckInput,
+      modifier: Cyberpunk2020ModifierInput,
+    };
+  },
+
+  processCheck: async (actor, inputs) => {
+    const [type, key] = inputs.check.split(":");
+
+    switch (type) {
+      case "stat":
+        return actor.rollStat(key);
+
+      case "skill": {
+        const item = actor.items.get(key);
+        if (!item || item.type !== "skill") {
+          throw new Error(`Unknown Cyberpunk 2020 skill: ${key}`);
+        }
+
+        return actor.rollSkill(item.id, inputs.modifier ?? 0);
+      }
+
+      default:
+        throw new Error(`Unsupported Cyberpunk 2020 check type: ${type}`);
+    }
   },
 };
