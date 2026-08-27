@@ -27,7 +27,7 @@ Hooks.on("ready", () => {
 async function openTestsDebugDialog() {
     const content = document.createElement("div");
     content.innerHTML = `
-        <div class="ripper-tests-debug">
+        <div class="ripper-tests-debug standard-form">
             <div class="form-group">
                 <label>Actor</label>
                 <select id="ripper-tests-actor"></select>
