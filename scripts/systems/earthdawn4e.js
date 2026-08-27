@@ -179,10 +179,12 @@ export default async function earthdawn4e() {
       const roll = await new Roll(dice ? dice.replace(/(d\d+)/g, "$1x") : "0").evaluate();
       const total = Math.max(1, roll.total);
 
-      await roll.toMessage({
-        speaker: ChatMessage.getSpeaker({ actor }),
-        flavor: game.i18n.localize(EARTHDAWN_ATTRIBUTES[inputs.check]),
-      });
+      if (!options.silent) {
+        await roll.toMessage({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          flavor: game.i18n.localize(EARTHDAWN_ATTRIBUTES[inputs.check]),
+        });
+      }
 
       const margin = inputs.difficulty > 0 ? total - inputs.difficulty : undefined;
       const result = { total, margin };

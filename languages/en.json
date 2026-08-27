@@ -19,6 +19,7 @@
             "Stat": "Stat",
             "Actor": "Actor",
             "FastForward": "Fast Forward",
+            "Silent": "Silent",
             "SerializedValue": "Serialized value",
             "Result": "Result",
             "RunCheck": "Run Check",

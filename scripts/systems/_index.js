@@ -111,7 +111,7 @@ export const defaultTestsInterface = {
 
   processCheck: async (actor, inputs, options = {}) => {
     const roll = await new foundry.dice.Roll(inputs.formula, actor.getRollData?.()).evaluate();
-    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
+    if (!options.silent) await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
 
     const target = Number.isNumeric(inputs.dc) ? inputs.dc : null;
     const success = target != null ? roll.total >= target : null;

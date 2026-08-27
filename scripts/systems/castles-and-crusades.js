@@ -147,11 +147,13 @@ export default async function castlesAndCrusades() {
         : game.settings.get("castles-and-crusades", "secondarySiegeChallengeBase") ?? 18;
       const challengeClass = base + (inputs.dc ?? 0);
 
-      await roll.toMessage({
-        speaker: ChatMessage.getSpeaker({ actor }),
-        rollMode: game.settings.get("core", "rollMode"),
-        flavor: `${game.i18n.localize(`TLGCC.Ability${inputs.check.capitalize()}`)} — CL ${challengeClass}`,
-      });
+      if (!options.silent) {
+        await roll.toMessage({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          rollMode: game.settings.get("core", "rollMode"),
+          flavor: `${game.i18n.localize(`TLGCC.Ability${inputs.check.capitalize()}`)} - CL ${challengeClass}`,
+        });
+      }
 
       return {
         canceled: false,

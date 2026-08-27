@@ -385,6 +385,7 @@ export default async function systemAdapter() {
 //
 //   {
 //     fastForward: false,  Whether to skip the system's roll dialog if possible
+//     silent: false,       Whether to suppress chat output for the check
 //     event: null,         An optional originating event passed to the native check
 //   }
 //
@@ -428,6 +429,7 @@ export default async function systemAdapter() {
    * @param {Object<string, any>} inputs
    * @param {Object} [options]        Options for the check.
    * @param {boolean} [options.fastForward]  Whether to skip the roll dialog if possible.
+   * @param {boolean} [options.silent]       Whether to suppress chat output for the check.
    * @param {Event} [options.event]    An optional originating event.
    * @returns {Promise<{
    *   canceled: boolean,

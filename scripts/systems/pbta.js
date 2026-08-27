@@ -120,7 +120,7 @@ export default async function pbta() {
         { rollType: "stat", stat: inputs.check },
       );
       await roll.evaluate();
-      await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
+      if (!options.silent) await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
 
       const rollResults = game.pbta?.sheetConfig?.rollResults ?? {};
       let outcome = null;

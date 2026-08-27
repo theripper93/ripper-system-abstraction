@@ -170,7 +170,7 @@ export default async function starwarsffg() {
       }
 
       const roll = new game.ffg.RollFFG(pool.renderDiceExpression(), null, pool, flavor);
-      await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
+      if (!options.silent) await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
 
       const netSuccesses = roll.ffg?.success ?? 0;
 

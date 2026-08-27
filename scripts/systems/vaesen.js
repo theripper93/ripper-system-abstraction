@@ -144,7 +144,7 @@ export default async function vaesen() {
         { yzGame: "vae" },
         { name, event: options.event },
       ).evaluate();
-      await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
+      if (!options.silent) await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
 
       const successCount = roll.successCount ?? 0;
       const diceCount = Math.max(1, pool);

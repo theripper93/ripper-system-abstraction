@@ -154,7 +154,7 @@ export default async function crucible() {
     processCheck: async (actor, inputs, options = {}) => {
       const check = await actor.rollSkill(inputs.check, {
         dc: inputs.dc,
-        chatMessage: true,
+        chatMessage: !options.silent,
       });
 
       return normalizeCheck(check);

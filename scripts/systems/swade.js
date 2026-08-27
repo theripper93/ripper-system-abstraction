@@ -169,7 +169,7 @@ export default async function swade() {
           },
         ];
       }
-      if (options.fastForward) rollOptions.suppressChat = true;
+      if (options.silent || options.fastForward) rollOptions.suppressChat = true;
 
       let roll;
       if (inputs.check in CONFIG.SWADE.attributes) {

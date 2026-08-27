@@ -192,10 +192,12 @@ export default async function CoC7() {
       : total <= regular ? 1
       : 0;
 
-    await roll.toMessage({
-      speaker: ChatMessage.getSpeaker({ actor }),
-      flavor: label,
-    });
+    if (!options.silent) {
+      await roll.toMessage({
+        speaker: ChatMessage.getSpeaker({ actor }),
+        flavor: label,
+      });
+    }
 
     return {
       canceled: false,

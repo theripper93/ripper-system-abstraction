@@ -187,27 +187,28 @@ export default async function dnd5e() {
       const [type, key] = inputs.check.split(".");
       const config = { event: options.event };
       const dialog = options.fastForward ? { configure: false } : {};
+      const message = options.silent ? { create: false } : {};
 
       let rolls;
       switch (type) {
         case "skill":
-          rolls = await actor.rollSkill({ skill: key, ...config }, dialog);
+          rolls = await actor.rollSkill({ skill: key, ...config }, dialog, message);
           break;
 
         case "save":
           if (key === "death") {
-            rolls = await actor.rollDeathSave(config, dialog);
+            rolls = await actor.rollDeathSave(config, dialog, message);
           } else {
-            rolls = await actor.rollSavingThrow({ ability: key, ...config }, dialog);
+            rolls = await actor.rollSavingThrow({ ability: key, ...config }, dialog, message);
           }
           break;
 
         case "check":
-          rolls = await actor.rollAbilityCheck({ ability: key, ...config }, dialog);
+          rolls = await actor.rollAbilityCheck({ ability: key, ...config }, dialog, message);
           break;
 
         case "tool":
-          rolls = await actor.rollToolCheck({ tool: key, ...config }, dialog);
+          rolls = await actor.rollToolCheck({ tool: key, ...config }, dialog, message);
           break;
 
         default:

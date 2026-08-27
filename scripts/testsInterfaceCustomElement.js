@@ -96,6 +96,7 @@ export function parse(value) {
  * @param {string} value            The serialized inputs string.
  * @param {Object} [options]        Options for the check.
  * @param {boolean} [options.fastForward]  Whether to skip the roll dialog if possible.
+ * @param {boolean} [options.silent]       Whether to suppress chat output for the check.
  * @param {Event} [options.event]    An optional originating event.
  * @returns {Promise<{canceled: boolean, result: number|null, target: number|null,
  *   success: boolean|null, levelOfSuccess: number|null, criticalSuccess: boolean,
@@ -103,7 +104,20 @@ export function parse(value) {
  */
 export async function processCheck(actor, value, options = {}) {
   const inputs = parse(value);
-  return getTestsInterface().processCheck(actor, inputs, options);
+  const iface = getTestsInterface();
+  if (!options.silent) return iface.processCheck(actor, inputs, options);
+
+  const actorIds = new Set([actor.uuid, actor.id].filter(Boolean));
+  const hook = (message) => {
+    const speaker = message?.speaker?.actor;
+    if (speaker && actorIds.has(speaker)) return false;
+  };
+  Hooks.on("preCreateChatMessage", hook);
+  try {
+    return await iface.processCheck(actor, inputs, options);
+  } finally {
+    Hooks.off("preCreateChatMessage", hook);
+  }
 }
 
 /**

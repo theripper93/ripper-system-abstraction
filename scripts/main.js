@@ -44,6 +44,10 @@ async function openTestsDebugDialog() {
                 <label>${i18n("ripper-system-abstraction.tests.FastForward")}</label>
                 <input type="checkbox" id="ripper-tests-fastforward">
             </div>
+            <div class="form-group">
+                <label>${i18n("ripper-system-abstraction.tests.Silent")}</label>
+                <input type="checkbox" id="ripper-tests-silent">
+            </div>
             <tests-interface id="ripper-tests-element"></tests-interface>
             <label>${i18n("ripper-system-abstraction.tests.SerializedValue")}</label>
             <div class="ripper-tests-result" id="ripper-tests-value"></div>
@@ -104,6 +108,7 @@ async function runCheck(dialog) {
     const select = root.querySelector("#ripper-tests-actor");
     const element = root.querySelector("tests-interface");
     const fastForward = root.querySelector("#ripper-tests-fastforward");
+    const silent = root.querySelector("#ripper-tests-silent");
     const resultElement = root.querySelector("#ripper-tests-result");
 
     const actor = game.actors.get(select.value);
@@ -122,6 +127,7 @@ async function runCheck(dialog) {
     try {
         const result = await API.tests.processCheck(actor, value, {
             fastForward: fastForward.checked,
+            silent: silent.checked,
         });
         console.log("ripper-system-abstraction | Check result:", result);
         resultElement.textContent = formatCheckResult(result);
