@@ -79,6 +79,7 @@ class SymbaroumCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -98,14 +99,23 @@ class SymbaroumModifierInput extends DataModel {
   }
 }
 
+const SYMBAROUM_ATTRIBUTES = {
+  accurate: "ATTRIBUTE.ACCURATE",
+  cunning: "ATTRIBUTE.CUNNING",
+  discreet: "ATTRIBUTE.DISCREET",
+  quick: "ATTRIBUTE.QUICK",
+  persuasive: "ATTRIBUTE.PERSUASIVE",
+  resolute: "ATTRIBUTE.RESOLUTE",
+  strong: "ATTRIBUTE.STRONG",
+  vigilant: "ATTRIBUTE.VIGILANT",
+};
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
-    for (const [key, attribute] of Object.entries(
-      actor.system.attributes ?? {},
-    )) {
-      choices[key] = game.i18n.localize(attribute.label ?? key);
+    for (const [key, label] of Object.entries(SYMBAROUM_ATTRIBUTES)) {
+      choices[key] = game.i18n.localize(label);
     }
 
     class CheckInput extends SymbaroumCheckInput {
@@ -126,8 +136,8 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    return game.symbaroum.api.rollAttribute(
+  processCheck: async (actor, inputs, options = {}) => {
+    const rollData = await game.symbaroum.api.rollAttribute(
       actor,
       inputs.check,
       null,
@@ -139,5 +149,19 @@ export const testsInterface = {
       false,
       "",
     );
+
+    if (!rollData) {
+      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
+
+    return {
+      canceled: false,
+      result: rollData.diceResult,
+      target: rollData.diceTarget,
+      success: rollData.hasSucceed === true,
+      levelOfSuccess: Math.clamp(50 + ((rollData.diceTarget ?? 0) - (rollData.diceResult ?? 0)), 0, 100),
+      criticalSuccess: rollData.critSuccess === true,
+      criticalFailure: rollData.critFail === true,
+    };
   },
 };

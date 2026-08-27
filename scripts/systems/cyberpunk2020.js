@@ -75,6 +75,7 @@ class Cyberpunk2020CheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -95,18 +96,23 @@ class Cyberpunk2020ModifierInput extends DataModel {
   }
 }
 
+const CYBERPUNK_STATS = ["int", "ref", "tech", "cool", "attr", "luck", "ma", "bt", "emp"];
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
-    for (const [key] of Object.entries(actor.system.stats ?? {})) {
-      choices[`stat.${key}`] = game.i18n.localize(
-        `CYBERPUNK.${key.capitalize()}Full`,
-      );
+    for (const key of CYBERPUNK_STATS) {
+      choices[`stat.${key}`] = game.i18n.localize(`CYBERPUNK.${key.capitalize()}Full`);
     }
 
-    for (const item of actor.items.filter((i) => i.type === "skill")) {
-      choices[`skill.${item.id}`] = item.name;
+    for (const packId of ["cyberpunk2020.default-skills-en", "cyberpunk2020.role-skills-en", "cyberpunk2020.default-skills-ru", "cyberpunk2020.role-skills-ru"]) {
+      const pack = game.packs.get(packId);
+      if (!pack?.indexed) continue;
+      const index = pack.index instanceof Map ? pack.index.values() : pack.index;
+      for (const entry of index) {
+        if (entry.type === "skill") choices[`skill.${entry.name}`] = entry.name;
+      }
     }
 
     class CheckInput extends Cyberpunk2020CheckInput {
@@ -127,24 +133,72 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(":");
 
-    switch (type) {
-      case "stat":
-        return actor.rollStat(key);
+    if (type === "stat") {
+      const roll = await new Promise((resolve) => {
+        const hook = (message) => {
+          Hooks.off("createChatMessage", hook);
+          resolve(message.rolls?.[0] ?? null);
+        };
+        Hooks.once("createChatMessage", hook);
+        actor.rollStat(key);
+        setTimeout(() => {
+          Hooks.off("createChatMessage", hook);
+          resolve(null);
+        }, 1000);
+      });
 
-      case "skill": {
-        const item = actor.items.get(key);
-        if (!item || item.type !== "skill") {
-          throw new Error(`Unknown Cyberpunk 2020 skill: ${key}`);
-        }
-
-        return actor.rollSkill(item.id, inputs.modifier ?? 0);
+      if (!roll) {
+        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
       }
 
-      default:
-        throw new Error(`Unsupported Cyberpunk 2020 check type: ${type}`);
+      return {
+        canceled: false,
+        result: roll.total,
+        target: null,
+        success: null,
+        levelOfSuccess: null,
+        criticalSuccess: roll.isCrit === true,
+        criticalFailure: roll.isFumble === true,
+      };
     }
+
+    if (type === "skill") {
+      const item = actor.items.find((i) => i.type === "skill" && i.name === key);
+      if (!item) {
+        return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      }
+
+      const roll = await new Promise((resolve) => {
+        const hook = (message) => {
+          Hooks.off("createChatMessage", hook);
+          resolve(message.rolls?.[0] ?? null);
+        };
+        Hooks.once("createChatMessage", hook);
+        actor.rollSkill(item.id, inputs.modifier ?? 0);
+        setTimeout(() => {
+          Hooks.off("createChatMessage", hook);
+          resolve(null);
+        }, 1000);
+      });
+
+      if (!roll) {
+        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      }
+
+      return {
+        canceled: false,
+        result: roll.total,
+        target: null,
+        success: null,
+        levelOfSuccess: null,
+        criticalSuccess: roll.isCrit === true,
+        criticalFailure: roll.isFumble === true,
+      };
+    }
+
+    throw new Error(`Unsupported Cyberpunk 2020 check type: ${type}`);
   },
 };

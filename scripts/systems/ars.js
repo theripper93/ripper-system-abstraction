@@ -83,6 +83,7 @@ class ARSCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -90,8 +91,24 @@ class ARSCheckInput extends DataModel {
   }
 }
 
+function normalizeRoll(roll) {
+  if (!roll) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  return {
+    canceled: false,
+    result: roll.total,
+    target: roll.checkTarget != null ? Number(roll.checkTarget) : null,
+    success: roll.success === true,
+    levelOfSuccess: roll.success === true ? 100 : 0,
+    criticalSuccess: roll.critical === true,
+    criticalFailure: roll.fumble === true,
+  };
+}
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
     for (const [key, label] of Object.entries(CONFIG.ARS.abilityTypes)) {
@@ -102,10 +119,6 @@ export const testsInterface = {
     for (const [key, label] of Object.entries(CONFIG.ARS.saveTypes)) {
       if (key === "none") continue;
       choices[`save.${key}`] = game.i18n.localize(label);
-    }
-
-    for (const item of actor.items.filter((i) => i.type === "skill")) {
-      choices[`skill.${item.name}`] = item.name;
     }
 
     class CheckInput extends ARSCheckInput {
@@ -125,27 +138,32 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
 
+    if (options.fastForward) {
+      const target = type === "ability"
+        ? Number(actor.system.abilities[key]?.value ?? 10)
+        : Number(actor.system.saves[key]?.value ?? 0);
+      const roll = await new game.ars.ARSDice(actor).makeGenericRoll("d20", target, type === "ability" ? "descending" : "ascending", true);
+
+      return normalizeRoll(roll);
+    }
+
+    let roll;
     switch (type) {
       case "ability":
-        return new game.ars.ARSDice(actor).makeAbilityCheckRollAsync(key, "d20");
+        roll = await new game.ars.ARSDice(actor, null, { event: options.event }).makeAbilityCheckRollAsync(key, "d20");
+        break;
 
       case "save":
-        return new game.ars.ARSDice(actor).makeSaveRollAsync(key);
-
-      case "skill": {
-        const skill = actor.items.find(
-          (i) => i.type === "skill" && (i.id === key || i.name === key),
-        );
-        if (!skill) throw new Error(`Unknown ARS skill: ${key}`);
-
-        return new game.ars.ARSDice(actor, skill).makeSkillRoll(true);
-      }
+        roll = await new game.ars.ARSDice(actor, null, { event: options.event }).makeSaveRollAsync(key);
+        break;
 
       default:
         throw new Error(`Unsupported ARS check type: ${type}`);
     }
+
+    return normalizeRoll(roll);
   },
 };

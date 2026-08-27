@@ -80,6 +80,7 @@ class WildTalentsCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -128,14 +129,36 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const dice = actor.system.stats?.[inputs.check];
     if (!dice) throw new Error(`Unknown Wild Talents stat: ${inputs.check}`);
 
-    return game.wildtalents.quickRoll(dice, {
+    const message = await game.wildtalents.quickRoll(dice, {
       flavor: game.i18n.localize(WILD_TALENTS_STATS[inputs.check]),
       minHeight: inputs.difficulty ?? 1,
       speaker: { actor: actor.id },
     });
+
+    let success = null;
+    try {
+      const module = await import("/systems/wildtalents/rolls/ORERoll.mjs");
+      const ORERoll = module.ORERoll ?? module.default?.ORERoll ?? module.default;
+      if (ORERoll?.fromRollFlavor) {
+        const roll = ORERoll.fromRollFlavor(message.rolls[0]);
+        success = roll?.isSuccess === true;
+      }
+    } catch (err) {
+      success = null;
+    }
+
+    return {
+      canceled: false,
+      result: null,
+      target: inputs.difficulty ?? 1,
+      success,
+      levelOfSuccess: success == null ? null : success ? 100 : 0,
+      criticalSuccess: false,
+      criticalFailure: false,
+    };
   },
 };

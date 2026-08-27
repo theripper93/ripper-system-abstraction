@@ -71,6 +71,7 @@ class DeltaGreenCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -92,23 +93,19 @@ class DeltaGreenModifierInput extends DataModel {
 }
 
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
-    for (const [key] of Object.entries(actor.system.statistics ?? {})) {
-      choices[`stat.${key}`] = game.i18n.localize(
-        `DG.Attributes.${key.toUpperCase()}`,
-      );
+    const attributes = game.i18n.translations?.DG?.Attributes ?? {};
+    for (const key of Object.keys(attributes)) {
+      if (!/^[a-z]{3}$/.test(key)) continue;
+      choices[`stat.${key}`] = game.i18n.localize(`DG.Attributes.${key}`);
     }
 
-    for (const [key] of Object.entries(actor.system.skills ?? {})) {
+    const skills = game.i18n.translations?.DG?.Skills ?? {};
+    for (const key of Object.keys(skills)) {
+      if (["flight", "ritual"].includes(key)) continue;
       choices[`skill.${key}`] = game.i18n.localize(`DG.Skills.${key}`);
-    }
-
-    for (const [key, typed] of Object.entries(
-      actor.system.typedSkills ?? {},
-    )) {
-      choices[`skill.${key}`] = typed.label ?? key;
     }
 
     class CheckInput extends DeltaGreenCheckInput {
@@ -129,11 +126,11 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    const DGPercentileRoll = CONFIG.Dice.rolls.find(
-      (roll) => roll.name === "DGPercentileRoll",
-    );
-    if (!DGPercentileRoll) return null;
+  processCheck: async (actor, inputs, options = {}) => {
+    const DGPercentileRoll = CONFIG.Dice.rolls.find((roll) => roll.name === "DGPercentileRoll");
+    if (!DGPercentileRoll) {
+      return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
 
     const [type, key] = inputs.check.split(".");
     const roll = new DGPercentileRoll("1D100", {}, {
@@ -146,6 +143,15 @@ export const testsInterface = {
 
     await roll.evaluate();
     await roll.toChat();
-    return roll;
+
+    return {
+      canceled: false,
+      result: roll.total,
+      target: roll.effectiveTarget ?? roll.target,
+      success: roll.isSuccess === true,
+      levelOfSuccess: Math.clamp(50 + ((roll.effectiveTarget ?? roll.target) - roll.total), 0, 100),
+      criticalSuccess: roll.isCritical === true && roll.isSuccess === true,
+      criticalFailure: roll.isCritical === true && roll.isSuccess !== true,
+    };
   },
 };

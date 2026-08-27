@@ -83,6 +83,7 @@ class ShadowdarkCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -102,6 +103,25 @@ class ShadowdarkDCInput extends DataModel {
       }),
     };
   }
+}
+
+function normalizeRoll(roll, dc) {
+  if (!roll) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const target = Number.isNumeric(roll.options?.dc) ? Number(roll.options.dc) : Number.isNumeric(dc) ? dc : null;
+  const success = target != null ? roll.total >= target : null;
+
+  return {
+    canceled: false,
+    result: roll.total,
+    target,
+    success,
+    levelOfSuccess: success == null ? null : success ? 100 : 0,
+    criticalSuccess: roll.criticalSuccess === true,
+    criticalFailure: roll.criticalFailure === true,
+  };
 }
 
 export const testsInterface = {
@@ -130,10 +150,14 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    const config = { skipPrompt: true };
+  processCheck: async (actor, inputs, options = {}) => {
+    const config = {
+      skipPrompt: options.fastForward ?? false,
+      event: options.event,
+    };
     if (inputs.dc != null) config.mainRoll = { dc: inputs.dc };
 
-    return actor.system.rollStatCheck(inputs.check, config);
+    const roll = await actor.system.rollStatCheck(inputs.check, config);
+    return normalizeRoll(roll, inputs.dc);
   },
 };

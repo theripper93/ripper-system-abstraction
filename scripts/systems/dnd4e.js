@@ -83,6 +83,7 @@ class DND4ECheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -102,6 +103,25 @@ class DND4EDCInput extends DataModel {
       }),
     };
   }
+}
+
+function normalizeRoll(roll, dc) {
+  if (roll === false || !roll) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const target = Number.isNumeric(dc) ? dc : null;
+  const success = target != null ? roll.total >= target : null;
+
+  return {
+    canceled: false,
+    result: roll.total,
+    target,
+    success,
+    levelOfSuccess: success == null ? null : success ? 100 : 0,
+    criticalSuccess: false,
+    criticalFailure: false,
+  };
 }
 
 export const testsInterface = {
@@ -134,19 +154,28 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
-    const options = inputs.dc != null ? { dc: inputs.dc } : {};
+    const rollOptions = {
+      fastForward: options.fastForward ?? false,
+      event: options.event,
+    };
+    if (inputs.dc != null) rollOptions.dc = inputs.dc;
 
+    let roll;
     switch (type) {
       case "skill":
-        return actor.rollSkill(key, options);
+        roll = await actor.rollSkill(key, rollOptions);
+        break;
 
       case "ability":
-        return actor.rollAbility(key, options);
+        roll = await actor.rollAbility(key, rollOptions);
+        break;
 
       default:
         throw new Error(`Unsupported D&D 4e check type: ${type}`);
     }
+
+    return normalizeRoll(roll, inputs.dc);
   },
 };

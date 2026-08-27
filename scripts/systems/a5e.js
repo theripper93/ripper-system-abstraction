@@ -83,6 +83,7 @@ class A5ECheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -104,8 +105,32 @@ class A5EDCInput extends DataModel {
   }
 }
 
+function normalizeRoll(message, dc) {
+  if (!message) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const roll = message.rolls?.[0];
+  const d20 = roll?.dice?.[0];
+  const active = d20?.results?.filter((r) => r.active) ?? [];
+  const criticalSuccess = active.some((r) => r.result >= 20);
+  const criticalFailure = active.some((r) => r.result === 1);
+  const target = Number.isNumeric(dc) ? dc : null;
+  const success = target != null ? roll.total >= target : null;
+
+  return {
+    canceled: false,
+    result: roll?.total ?? null,
+    target,
+    success,
+    levelOfSuccess: success == null ? null : success ? 100 : 0,
+    criticalSuccess,
+    criticalFailure,
+  };
+}
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
     for (const [key, value] of Object.entries(CONFIG.A5E.abilities)) {
@@ -137,29 +162,38 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
-    const options = { skipRollDialog: true };
+    const rollOptions = {
+      skipRollDialog: options.fastForward ?? false,
+      event: options.event,
+    };
 
+    let message;
     switch (type) {
       case "skill":
-        return actor.rollSkillCheck(key, options);
+        message = await actor.rollSkillCheck(key, rollOptions);
+        break;
 
       case "save":
         if (key === "death") {
-          return actor.rollSavingThrow(undefined, {
-            ...options,
+          message = await actor.rollSavingThrow(undefined, {
+            ...rollOptions,
             saveType: "death",
           });
+        } else {
+          message = await actor.rollSavingThrow(key, rollOptions);
         }
-
-        return actor.rollSavingThrow(key, options);
+        break;
 
       case "check":
-        return actor.rollAbilityCheck(key, options);
+        message = await actor.rollAbilityCheck(key, rollOptions);
+        break;
 
       default:
         throw new Error(`Unsupported A5E check type: ${type}`);
     }
+
+    return normalizeRoll(message, inputs.dc);
   },
 };

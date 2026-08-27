@@ -71,6 +71,7 @@ class PbtACheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -78,11 +79,14 @@ class PbtACheckInput extends DataModel {
   }
 }
 
+const PBTa_OUTCOME_LEVELS = { failure: 0, partial: 50, success: 100, critical: 100 };
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
-    for (const [key, stat] of Object.entries(actor.system.stats ?? {})) {
+    const stats = game.pbta?.sheetConfig?.actorTypes?.character?.stats ?? {};
+    for (const [key, stat] of Object.entries(stats)) {
       choices[key] = stat.label ?? key;
     }
 
@@ -103,7 +107,38 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    return actor._onRollStat(inputs.check, inputs.check, {});
+  processCheck: async (actor, inputs, options = {}) => {
+    if (!(inputs.check in (actor.system.stats ?? {}))) {
+      throw new Error(`Unknown PbtA stat: ${inputs.check}`);
+    }
+
+    const roll = new CONFIG.Dice.RollPbtA(
+      actor._getStatFormula(inputs.check),
+      actor.getRollData(),
+      { rollType: "stat", stat: inputs.check },
+    );
+    await roll.evaluate();
+    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
+
+    const rollResults = game.pbta?.sheetConfig?.rollResults ?? {};
+    let outcome = null;
+    for (const [key, range] of Object.entries(rollResults)) {
+      if ((!range.start || roll.total >= range.start) && (!range.end || roll.total <= range.end)) {
+        outcome = key;
+        break;
+      }
+    }
+
+    const success = outcome === "success" || outcome === "critical";
+
+    return {
+      canceled: false,
+      result: roll.total,
+      target: null,
+      success,
+      levelOfSuccess: outcome != null ? (PBTa_OUTCOME_LEVELS[outcome] ?? null) : null,
+      criticalSuccess: outcome === "critical",
+      criticalFailure: false,
+    };
   },
 };

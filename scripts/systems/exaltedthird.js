@@ -71,6 +71,7 @@ class ExaltedThirdCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -96,9 +97,8 @@ export const testsInterface = {
   buildInputs: () => {
     const choices = {};
 
-    for (const [key, label] of Object.entries(
-      CONFIG.exaltedthird.selects.abilities.entries,
-    )) {
+    for (const [key, label] of Object.entries(CONFIG.exaltedthird.selects.abilities)) {
+      if (!key) continue;
       choices[key] = game.i18n.localize(label);
     }
 
@@ -120,14 +120,35 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    const data = {
+  processCheck: async (actor, inputs, options = {}) => {
+    const RollForm = game.exaltedthird?.RollForm;
+    if (!RollForm) {
+      return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
+
+    const form = new RollForm(actor, {}, {}, {
       rollType: "ability",
       ability: inputs.check,
       attribute: actor.system.abilities[inputs.check]?.prefattribute,
       difficulty: inputs.difficulty ?? 0,
-    };
+      skipDialog: true,
+    });
+    await form.roll();
 
-    return game.exaltedthird.roll(actor, {}, data);
+    const object = form.object;
+    const total = object.diceRollTotal;
+    const difficulty = object.difficulty ?? 0;
+    const botch = total === 0 && (object.roll?.dice?.[0]?.results ?? []).some((die) => die.result === 1);
+    const success = difficulty > 0 ? total >= difficulty : null;
+
+    return {
+      canceled: false,
+      result: total,
+      target: difficulty > 0 ? difficulty : null,
+      success,
+      levelOfSuccess: difficulty > 0 ? Math.clamp(50 + (object.thresholdSuccesses ?? 0) * 10, 0, 100) : null,
+      criticalSuccess: false,
+      criticalFailure: botch,
+    };
   },
 };

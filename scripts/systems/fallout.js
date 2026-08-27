@@ -75,6 +75,7 @@ class FalloutCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -83,15 +84,19 @@ class FalloutCheckInput extends DataModel {
 }
 
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
     for (const [key, label] of Object.entries(CONFIG.FALLOUT.ATTRIBUTES)) {
       choices[`attribute.${key}`] = game.i18n.localize(label);
     }
 
-    for (const item of actor.items.filter((i) => i.type === "skill")) {
-      choices[`skill.${item.name}`] = item.name;
+    const pack = game.packs.get("fallout.skills");
+    if (pack?.indexed) {
+      const index = pack.index instanceof Map ? pack.index.values() : pack.index;
+      for (const entry of index) {
+        if (entry.type === "skill") choices[`skill.${entry.name}`] = entry.name;
+      }
     }
 
     class CheckInput extends FalloutCheckInput {
@@ -111,40 +116,44 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
     const complication = parseInt(actor.system.complication) || 20;
+    const rollData = { actor, dicenum: 2, complication, event: options.event };
 
     if (type === "attribute") {
-      return fallout.Roller2D20.rollD20({
-        actor,
-        rollname: game.i18n.localize(CONFIG.FALLOUT.ATTRIBUTES[key]),
-        dicenum: 2,
-        attribute: actor.system.attributes[key]?.value ?? 0,
-        skill: 0,
-        tag: false,
-        complication,
-      });
+      rollData.rollname = game.i18n.localize(CONFIG.FALLOUT.ATTRIBUTES[key]);
+      rollData.attribute = actor.system.attributes[key]?.value ?? 0;
+      rollData.skill = 0;
+      rollData.tag = false;
+    } else if (type === "skill") {
+      const owned = actor.items.find((i) => i.type === "skill" && i.name === key);
+      const pack = game.packs.get("fallout.skills");
+      const index = pack?.indexed ? (pack.index instanceof Map ? pack.index.values() : pack.index) : [];
+      const entry = [...index].find((e) => e.type === "skill" && e.name === key);
+
+      rollData.rollname = owned?.name ?? key;
+      rollData.attribute = actor.system.attributes[owned?.system?.defaultAttribute ?? entry?.system?.defaultAttribute ?? "str"]?.value ?? 0;
+      rollData.skill = owned?.system?.value ?? 0;
+      rollData.tag = owned?.system?.tag ?? false;
+    } else {
+      throw new Error(`Unsupported Fallout check type: ${type}`);
     }
 
-    if (type === "skill") {
-      const skill = actor.items.find(
-        (i) => i.type === "skill" && i.name === key,
-      );
-      if (!skill) throw new Error(`Unknown Fallout skill: ${key}`);
+    const result = await fallout.Roller2D20.rollD20(rollData);
 
-      return fallout.Roller2D20.rollD20({
-        actor,
-        rollname: skill.name,
-        dicenum: 2,
-        attribute:
-          actor.system.attributes[skill.system.defaultAttribute]?.value ?? 0,
-        skill: skill.system.value ?? 0,
-        tag: skill.system.tag ?? false,
-        complication,
-      });
-    }
+    const successes = result.dicesRolled.reduce((sum, d) => sum + (d.success ?? 0), 0);
+    const crits = result.dicesRolled.reduce((sum, d) => sum + (d.success === 2 ? 1 : 0), 0);
+    const threshold = (rollData.attribute ?? 0) + (rollData.skill ?? 0);
 
-    throw new Error(`Unsupported Fallout check type: ${type}`);
+    return {
+      canceled: false,
+      result: successes,
+      target: threshold,
+      success: successes >= 1,
+      levelOfSuccess: successes >= 2 ? 100 : successes === 1 ? 50 : 0,
+      criticalSuccess: crits > 0,
+      criticalFailure: false,
+    };
   },
 };

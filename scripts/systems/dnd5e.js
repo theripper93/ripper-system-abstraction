@@ -79,17 +79,6 @@ export const dataPaths = {
   },
 };
 
-/**
- * D&D 5e check input.
- *
- * Values use the normalized format:
- *
- *   skill.acrobatics
- *   check.str
- *   save.dex
- *   save.death
- *   tool.thievesTools
- */
 class DND5ECheckInput extends DataModel {
   static defineSchema() {
     return {
@@ -101,9 +90,6 @@ class DND5ECheckInput extends DataModel {
   }
 }
 
-/**
- * D&D 5e Difficulty Class.
- */
 class DND5EDCInput extends DataModel {
   static defineSchema() {
     return {
@@ -118,34 +104,40 @@ class DND5EDCInput extends DataModel {
   }
 }
 
+function normalizeRoll(roll, dc) {
+  if (!roll) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const target = Number.isNumeric(dc) ? dc : null;
+  const criticalSuccess = roll.isCritical === true;
+  const criticalFailure = roll.isFumble === true;
+  const success = target != null ? roll.total >= target : null;
+
+  return {
+    canceled: false,
+    result: roll.total,
+    target,
+    success,
+    levelOfSuccess: success == null ? null : success ? 100 : 0,
+    criticalSuccess,
+    criticalFailure,
+  };
+}
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
-    // Ability checks
     for (const [key, value] of Object.entries(CONFIG.DND5E.abilities)) {
       choices[`check.${key}`] = value.label;
-    }
-
-    // Saving throws
-    for (const [key, value] of Object.entries(CONFIG.DND5E.abilities)) {
       choices[`save.${key}`] = value.label;
     }
 
-    // Death save
     choices["save.death"] = game.i18n.localize("DND5E.DeathSave");
 
-    // Skills
     for (const [key, value] of Object.entries(CONFIG.DND5E.skills)) {
       choices[`skill.${key}`] = value.label;
-    }
-
-    // Tools
-    if (actor?.system?.tools) {
-      for (const key of Object.keys(actor.system.tools)) {
-        choices[`tool.${key}`] =
-          CONFIG.DND5E.toolProficiencies[key] ?? key;
-      }
     }
 
     class CheckInput extends DND5ECheckInput {
@@ -166,36 +158,33 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
+    const config = { event: options.event };
+    const dialog = options.fastForward ? { configure: false } : {};
 
+    let rolls;
     switch (type) {
       case "skill":
-        return actor.rollSkill({
-          skill: key,
-        });
+        rolls = await actor.rollSkill({ skill: key, ...config }, dialog);
+        break;
 
       case "save":
         if (key === "death") {
-          return actor.rollDeathSave();
+          rolls = await actor.rollDeathSave(config, dialog);
+        } else {
+          rolls = await actor.rollSavingThrow({ ability: key, ...config }, dialog);
         }
-
-        return actor.rollSavingThrow({
-          ability: key,
-        });
+        break;
 
       case "check":
-        return actor.rollAbilityCheck({
-          ability: key,
-        });
-
-      case "tool":
-        return actor.rollToolCheck({
-          tool: key,
-        });
+        rolls = await actor.rollAbilityCheck({ ability: key, ...config }, dialog);
+        break;
 
       default:
         throw new Error(`Unsupported D&D 5e check type: ${type}`);
     }
+
+    return normalizeRoll(rolls?.[0], inputs.dc);
   },
 };

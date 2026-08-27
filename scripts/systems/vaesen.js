@@ -71,6 +71,7 @@ class VaesenCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -78,20 +79,18 @@ class VaesenCheckInput extends DataModel {
   }
 }
 
+const VAESEN_ATTRIBUTES = ["magic", "physique", "precision", "logic", "empathy"];
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
     for (const key of Object.keys(CONFIG.vaesen?.skills ?? {})) {
-      choices[`skill.${key}`] = game.i18n.localize(
-        CONFIG.vaesen.skills[key],
-      );
+      choices[`skill.${key}`] = game.i18n.localize(CONFIG.vaesen.skills[key]);
     }
 
-    for (const key of Object.keys(actor.system.attribute ?? {})) {
-      choices[`attribute.${key}`] = game.i18n.localize(
-        `ATTRIBUTE.${key.toUpperCase()}_ROLL`,
-      );
+    for (const key of VAESEN_ATTRIBUTES) {
+      choices[`attribute.${key}`] = game.i18n.localize(`ATTRIBUTE.${key.toUpperCase()}_ROLL`);
     }
 
     class CheckInput extends VaesenCheckInput {
@@ -111,18 +110,47 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    const [type, key] = inputs.check.split(".");
-
-    switch (type) {
-      case "skill":
-        return actor.sheet.rollSkill(key);
-
-      case "attribute":
-        return actor.sheet.rollAttribute(key);
-
-      default:
-        throw new Error(`Unsupported Vaesen check type: ${type}`);
+  processCheck: async (actor, inputs, options = {}) => {
+    const YearZeroRoll = CONFIG.Dice.rolls.find((roll) => roll.name === "YearZeroRoll");
+    if (!YearZeroRoll) {
+      return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
     }
+
+    const [type, key] = inputs.check.split(".");
+    let pool = 0;
+    let name = key;
+
+    if (type === "skill") {
+      const skill = actor.system.skill[key];
+      if (!skill) throw new Error(`Unknown Vaesen skill: ${key}`);
+      const attribute = actor.system.attribute[skill.attribute];
+      pool = (skill.value ?? 0) + (attribute?.value ?? 0);
+      name = game.i18n.localize(skill.label ?? key);
+    } else if (type === "attribute") {
+      pool = actor.system.attribute[key]?.value ?? 0;
+      name = game.i18n.localize(`ATTRIBUTE.${key.toUpperCase()}_ROLL`);
+    } else {
+      throw new Error(`Unsupported Vaesen check type: ${type}`);
+    }
+
+    const roll = await YearZeroRoll.forge(
+      { term: "s", number: Math.max(1, pool) },
+      { yzGame: "vae" },
+      { name, event: options.event },
+    ).evaluate();
+    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
+
+    const successCount = roll.successCount ?? 0;
+    const diceCount = Math.max(1, pool);
+
+    return {
+      canceled: false,
+      result: successCount,
+      target: null,
+      success: successCount > 0,
+      levelOfSuccess: Math.round((successCount / diceCount) * 100),
+      criticalSuccess: false,
+      criticalFailure: false,
+    };
   },
 };

@@ -32,6 +32,10 @@ async function openTestsDebugDialog() {
                 <label>Actor</label>
                 <select id="ripper-tests-actor"></select>
             </div>
+            <div class="form-group">
+                <label>Fast Forward</label>
+                <input type="checkbox" id="ripper-tests-fastforward">
+            </div>
             <tests-interface id="ripper-tests-element"></tests-interface>
             <label>Serialized value</label>
             <div class="ripper-tests-result" id="ripper-tests-value"></div>
@@ -71,12 +75,6 @@ function initTestsDialog(root) {
     if (controlled) select.value = controlled.id;
     else if (select.options.length) select.selectedIndex = 0;
 
-    element.actorId = select.value || null;
-
-    select.addEventListener("change", () => {
-        element.actorId = select.value || null;
-    });
-
     element.addEventListener("change", (event) => {
         const valueElement = root.querySelector("#ripper-tests-value");
         valueElement.textContent = event.detail?.value ?? "";
@@ -87,6 +85,7 @@ async function runCheck(dialog) {
     const root = dialog.element;
     const select = root.querySelector("#ripper-tests-actor");
     const element = root.querySelector("tests-interface");
+    const fastForward = root.querySelector("#ripper-tests-fastforward");
     const resultElement = root.querySelector("#ripper-tests-result");
 
     const actor = game.actors.get(select.value);
@@ -103,13 +102,27 @@ async function runCheck(dialog) {
 
     resultElement.textContent = "Rolling...";
     try {
-        const result = await API.processCheck(actor, value);
+        const result = await API.processCheck(actor, value, {
+            fastForward: fastForward.checked,
+        });
         console.log("ripper-system-abstraction | Check result:", result);
-        resultElement.textContent = result
-            ? (result.result ?? result.formula ?? String(result))
-            : "Check complete (no result returned).";
+        resultElement.textContent = formatCheckResult(result);
     } catch (err) {
         console.error("ripper-system-abstraction | Check failed:", err);
         resultElement.textContent = `Error: ${err.message}`;
     }
+}
+
+function formatCheckResult(result) {
+    if (result?.canceled) return "Canceled";
+
+    const parts = [];
+    if (result.result != null) parts.push(`Result: ${result.result}`);
+    if (result.target != null) parts.push(`Target: ${result.target}`);
+    if (result.success != null) parts.push(result.success ? "Success" : "Failure");
+    if (result.levelOfSuccess != null) parts.push(`${result.levelOfSuccess}%`);
+    if (result.criticalSuccess) parts.push("Crit!");
+    if (result.criticalFailure) parts.push("Fumble!");
+
+    return parts.length ? parts.join(" · ") : "Done";
 }

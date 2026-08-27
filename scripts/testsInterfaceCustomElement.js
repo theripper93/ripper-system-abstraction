@@ -13,14 +13,14 @@ export function getTestsInterface(systemId = game.system.id) {
 
 /**
  * Build the DataModel classes describing the inputs required to run a check
- * for the given actor's game system.
+ * for the given game system. Choices are pulled from system configuration
+ * only, never from a specific actor.
  *
- * @param {Actor} [actor]          The actor the check will be performed with.
  * @param {string} [systemId]      The Foundry system ID. Defaults to game.system.id.
  * @returns {Object<string, typeof foundry.abstract.DataModel>}
  */
-export function buildInputs(actor, systemId = game.system.id) {
-  return getTestsInterface(systemId).buildInputs(actor);
+export function buildInputs(systemId = game.system.id) {
+  return getTestsInterface(systemId).buildInputs();
 }
 
 /**
@@ -64,11 +64,10 @@ export function serialize(inputs) {
  * coercing values according to the input DataModels returned by buildInputs.
  *
  * @param {string} value            The serialized inputs string.
- * @param {Actor} [actor]           The actor the inputs will be used with.
  * @param {string} [systemId]       The Foundry system ID. Defaults to game.system.id.
  * @returns {Object<string, any>}   The parsed and typed inputs object.
  */
-export function parse(value, actor, systemId = game.system.id) {
+export function parse(value, systemId = game.system.id) {
   const raw = {};
   if (value) {
     for (const pair of String(value).split("|")) {
@@ -79,7 +78,7 @@ export function parse(value, actor, systemId = game.system.id) {
     }
   }
 
-  const inputClasses = buildInputs(actor, systemId);
+  const inputClasses = buildInputs(systemId);
   const inputs = {};
 
   for (const [key, model] of Object.entries(inputClasses ?? {})) {
@@ -108,17 +107,22 @@ export function parse(value, actor, systemId = game.system.id) {
  *
  * @param {Actor} actor             The actor performing the check.
  * @param {string} value            The serialized inputs string.
+ * @param {Object} [options]        Options for the check.
+ * @param {boolean} [options.fastForward]  Whether to skip the roll dialog if possible.
+ * @param {Event} [options.event]    An optional originating event.
  * @param {string} [systemId]       The Foundry system ID. Defaults to game.system.id.
- * @returns {Promise<any>}          The native result of the system's check.
+ * @returns {Promise<{canceled: boolean, result: number|null, target: number|null,
+ *   success: boolean|null, levelOfSuccess: number|null, criticalSuccess: boolean,
+ *   criticalFailure: boolean}>}    The standardized check result.
  */
-export async function processCheck(actor, value, systemId = game.system.id) {
-  const inputs = parse(value, actor, systemId);
-  return getTestsInterface(systemId).processCheck(actor, inputs);
+export async function processCheck(actor, value, options = {}, systemId = game.system.id) {
+  const inputs = parse(value, systemId);
+  return getTestsInterface(systemId).processCheck(actor, inputs, options);
 }
 
 /**
- * A custom element which collects the inputs required to perform a check for
- * a specific actor, without executing the check itself.
+ * A custom element which collects the inputs required to perform a check,
+ * without executing the check itself.
  *
  * The element renders one control per input field described by the system's
  * tests interface `buildInputs` and exposes the collected data through:
@@ -131,34 +135,10 @@ export async function processCheck(actor, value, systemId = game.system.id) {
  * dispatched whenever the collected data changes.
  */
 export class TestsInterfaceElement extends HTMLElement {
-  static observedAttributes = ["actor-id"];
-
-  #actor = null;
-
   #fields = [];
 
   constructor() {
     super();
-  }
-
-  /** The actor-id attribute value. */
-  get actorId() {
-    return this.getAttribute("actor-id");
-  }
-
-  set actorId(value) {
-    if (value) this.setAttribute("actor-id", value);
-    else this.removeAttribute("actor-id");
-  }
-
-  /** The actor whose checks this element collects inputs for. */
-  get actor() {
-    return this.#actor;
-  }
-
-  set actor(value) {
-    this.#actor = value;
-    this.#render();
   }
 
   /** The collected inputs as a single "key=value|key=value" string. */
@@ -203,29 +183,10 @@ export class TestsInterfaceElement extends HTMLElement {
 
   /** @override */
   connectedCallback() {
-    this.#resolveActor();
-  }
-
-  /** @override */
-  attributeChangedCallback(name, oldValue, newValue) {
-    if (name === "actor-id" && oldValue !== newValue) this.#resolveActor();
+    this.#render();
   }
 
   /* -------------------------------------------- */
-
-  async #resolveActor() {
-    const id = this.actorId;
-    let actor = null;
-    if (id) {
-      try {
-        actor = game.actors.get(id) ?? (id.includes(".") ? await fromUuid(id) : null);
-      } catch (err) {
-        actor = null;
-      }
-    }
-    this.#actor = actor;
-    this.#render();
-  }
 
   #render() {
     this.replaceChildren();
@@ -233,7 +194,7 @@ export class TestsInterfaceElement extends HTMLElement {
 
     let inputClasses;
     try {
-      inputClasses = buildInputs(this.#actor);
+      inputClasses = buildInputs();
     } catch (err) {
       console.warn("ripper-system-abstraction | Failed to build check inputs:", err);
     }
@@ -242,7 +203,8 @@ export class TestsInterfaceElement extends HTMLElement {
       return;
     }
 
-    this.classList.add("form-group");
+    const container = document.createElement("div");
+    container.classList.add("tests-interface");
 
     for (const [key, model] of Object.entries(inputClasses)) {
       const modelFields = model.schema?.fields ?? {};
@@ -251,14 +213,16 @@ export class TestsInterfaceElement extends HTMLElement {
 
       for (const name of names) {
         const field = modelFields[name];
-        const group = field.toFormGroup({ localize: true, stacked: false }, { blank: "" });
+        const group = field.toFormGroup({ localize: true, stacked: true }, { blank: "" });
         const control = group.querySelector("input, select, textarea");
         control?.addEventListener("input", () => this.#emit());
         control?.addEventListener("change", () => this.#emit());
-        this.append(...group.children);
+        container.append(group);
         this.#fields.push({ key, name, single, field, control });
       }
     }
+
+    this.append(container);
     this.#emit();
   }
 

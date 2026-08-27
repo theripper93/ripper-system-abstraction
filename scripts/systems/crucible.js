@@ -76,6 +76,7 @@ class CrucibleCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -95,6 +96,31 @@ class CrucibleDCInput extends DataModel {
       }),
     };
   }
+}
+
+function normalizeCheck(check) {
+  if (!check) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const success = Number.isNumeric(check.data?.dc) ? check.isSuccess : null;
+  let levelOfSuccess = null;
+  if (success != null) {
+    if (check.isCriticalSuccess) levelOfSuccess = 100;
+    else if (check.isSuccess) levelOfSuccess = 66;
+    else if (check.isCriticalFailure) levelOfSuccess = 0;
+    else levelOfSuccess = 33;
+  }
+
+  return {
+    canceled: false,
+    result: check.total,
+    target: Number.isNumeric(check.data?.dc) ? check.data.dc : null,
+    success,
+    levelOfSuccess,
+    criticalSuccess: check.isCriticalSuccess === true,
+    criticalFailure: check.isCriticalFailure === true,
+  };
 }
 
 export const testsInterface = {
@@ -123,10 +149,12 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    return actor.rollSkill(inputs.check, {
+  processCheck: async (actor, inputs, options = {}) => {
+    const check = await actor.rollSkill(inputs.check, {
       dc: inputs.dc,
       chatMessage: true,
     });
+
+    return normalizeCheck(check);
   },
 };

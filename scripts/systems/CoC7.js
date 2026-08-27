@@ -71,6 +71,7 @@ class CoC7CheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -92,28 +93,49 @@ class CoC7DCInput extends DataModel {
   }
 }
 
+const SUCCESS_LEVEL_MAP = { 4: 100, 3: 75, 2: 50, 1: 25, 0: 0, "-99": 0 };
+
+function normalizeCheck(check) {
+  if (!check) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const success = check.isSuccess;
+  const level = SUCCESS_LEVEL_MAP[check.successLevel] ?? 0;
+
+  return {
+    canceled: false,
+    result: check.total,
+    target: null,
+    success,
+    levelOfSuccess: level,
+    criticalSuccess: check.isCritical === true,
+    criticalFailure: check.isFumble === true,
+  };
+}
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
     const characterSchema = CONFIG.Actor.dataModels.character?.schema;
-    const characteristicFields = Object.values(
-      characterSchema?.get("characteristics")?.fields ?? {},
-    );
+    const characteristicFields = Object.values(characterSchema?.get("characteristics")?.fields ?? {});
     for (const field of characteristicFields) {
       choices[`characteristic.${field.name}`] = game.i18n.localize(field.hint);
     }
 
-    const attribFields = Object.values(
-      characterSchema?.get("attribs")?.fields ?? {},
-    );
+    const attribFields = Object.values(characterSchema?.get("attribs")?.fields ?? {});
     for (const field of attribFields) {
       if (!["lck", "san"].includes(field.name)) continue;
       choices[`attribute.${field.name}`] = game.i18n.localize(field.hint);
     }
 
-    for (const item of actor.items.filter((i) => i.type === "skill")) {
-      choices[`skill.${item.name}`] = item.name;
+    const pack = game.packs.get("CoC7.skills");
+    if (pack?.indexed) {
+      const index = pack.index instanceof Map ? pack.index.values() : pack.index;
+      for (const entry of index) {
+        if (entry.type === "skill") choices[`skill.${entry.name}`] = entry.name;
+      }
     }
 
     class CheckInput extends CoC7CheckInput {
@@ -134,22 +156,29 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
     const difficulty = inputs.dc == null ? 1 : Math.clamp(inputs.dc, 1, 4);
+    const checkOptions = { difficulty, event: options.event };
 
+    let check;
     switch (type) {
       case "characteristic":
-        return actor.characteristicCheck(key, true, { difficulty });
+        check = await actor.characteristicCheck(key, options.fastForward ?? false, checkOptions);
+        break;
 
       case "attribute":
-        return actor.attributeCheck(key, true, { difficulty });
+        check = await actor.attributeCheck(key, options.fastForward ?? false, checkOptions);
+        break;
 
       case "skill":
-        return actor.skillCheck(key, true, { difficulty });
+        check = await actor.skillCheck(key, options.fastForward ?? false, checkOptions);
+        break;
 
       default:
         throw new Error(`Unsupported CoC7 check type: ${type}`);
     }
+
+    return normalizeCheck(check);
   },
 };

@@ -79,6 +79,7 @@ class WFRP4eCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -99,18 +100,41 @@ class WFRP4eDCInput extends DataModel {
   }
 }
 
+function normalizeTest(test) {
+  if (!test?.result) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const result = test.result;
+  const success = result.outcome === "success";
+  const sl = Number(result.SL) || 0;
+
+  return {
+    canceled: false,
+    result: result.roll,
+    target: result.target,
+    success,
+    levelOfSuccess: Math.clamp(50 + sl * 10, 0, 100),
+    criticalSuccess: test.isCriticalFumble === "critical",
+    criticalFailure: test.isCriticalFumble === "fumble",
+  };
+}
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
-    for (const [key, label] of Object.entries(
-      game.wfrp4e.config.characteristics,
-    )) {
+    for (const [key, label] of Object.entries(game.wfrp4e.config.characteristics)) {
       choices[`characteristic.${key}`] = game.i18n.localize(label);
     }
 
-    for (const item of actor.itemTags?.skill ?? []) {
-      choices[`skill.${item.name}`] = item.name;
+    for (const packId of ["wfrp4e-core.items", "wfrp4e.basic"]) {
+      const pack = game.packs.get(packId);
+      if (!pack?.indexed) continue;
+      const index = pack.index instanceof Map ? pack.index.values() : pack.index;
+      for (const entry of index) {
+        if (entry.type === "skill") choices[`skill.${entry.name}`] = entry.name;
+      }
     }
 
     class CheckInput extends WFRP4eCheckInput {
@@ -131,25 +155,35 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
-    const fields = { difficulty: inputs.dc ?? "challenging" };
-    const context = { skipDialog: true, skipTargets: true, fields };
+    const context = {
+      skipDialog: options.fastForward ?? false,
+      skipTargets: true,
+      event: options.event,
+      fields: {
+        difficulty: inputs.dc ?? "challenging",
+        modifier: 0,
+        successBonus: 0,
+        slBonus: 0,
+      },
+    };
 
     let test;
     if (type === "characteristic") {
-      test = await actor.setupCharacteristic(key, {
-        ...context,
-        hitloc: false,
-      });
+      test = await actor.setupCharacteristic(key, { ...context, hitloc: false }, { resolveClose: true });
     } else if (type === "skill") {
-      const skill =
-        actor.itemTags?.skill?.find((s) => s.name === key) ?? key;
-      test = await actor.setupSkill(skill, context);
+      const skill = actor.itemTags?.skill?.find((s) => s.name === key) ?? key;
+      test = await actor.setupSkill(skill, context, { resolveClose: true });
     } else {
       throw new Error(`Unsupported WFRP4e check type: ${type}`);
     }
 
-    return test.roll();
+    if (!test) {
+      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
+
+    await test.roll();
+    return normalizeTest(test);
   },
 };

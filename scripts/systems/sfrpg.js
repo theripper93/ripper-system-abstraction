@@ -77,6 +77,7 @@ class SFRPGCeckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -96,6 +97,31 @@ class SFRPGDCInput extends DataModel {
       }),
     };
   }
+}
+
+function normalizeRoll(result, dc) {
+  if (!result) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const roll = result.roll;
+  const target = Number.isNumeric(dc) ? dc : null;
+  let success = null;
+  if (target != null) {
+    if (roll.d20Critical) success = true;
+    else if (roll.d20Fumble) success = false;
+    else success = roll.total >= target;
+  }
+
+  return {
+    canceled: false,
+    result: roll.total,
+    target,
+    success,
+    levelOfSuccess: success == null ? null : success ? 100 : 0,
+    criticalSuccess: roll.d20Critical === true,
+    criticalFailure: roll.d20Fumble === true,
+  };
 }
 
 export const testsInterface = {
@@ -132,22 +158,34 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
-    const options = inputs.dc != null ? { dc: inputs.dc } : {};
+    const rollOptions = {
+      skipUI: options.fastForward ?? false,
+      event: options.event,
+    };
+    if (inputs.dc != null) rollOptions.dc = inputs.dc;
 
+    let result;
     switch (type) {
       case "skill":
-        return actor.rollSkill(key, options);
+        result = options.fastForward
+          ? await actor.rollSkillCheck(key, rollOptions)
+          : await actor.rollSkill(key, rollOptions);
+        break;
 
       case "ability":
-        return actor.rollAbility(key, options);
+        result = await actor.rollAbility(key, rollOptions);
+        break;
 
       case "save":
-        return actor.rollSave(key, options);
+        result = await actor.rollSave(key, rollOptions);
+        break;
 
       default:
         throw new Error(`Unsupported SFRPG check type: ${type}`);
     }
+
+    return normalizeRoll(result, inputs.dc);
   },
 };

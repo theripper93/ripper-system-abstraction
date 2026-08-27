@@ -81,6 +81,7 @@ class PF2ECheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -102,6 +103,27 @@ class PF2EDCInput extends DataModel {
   }
 }
 
+const DEGREE_TO_LEVEL = [0, 33, 66, 100];
+
+function normalizeRoll(roll, dc) {
+  if (!roll) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const degree = roll.degreeOfSuccess;
+  const target = Number.isNumeric(dc) ? dc : null;
+
+  return {
+    canceled: false,
+    result: roll.total,
+    target,
+    success: degree != null ? degree >= 2 : null,
+    levelOfSuccess: degree != null ? DEGREE_TO_LEVEL[degree] : null,
+    criticalSuccess: degree === 3,
+    criticalFailure: degree === 0,
+  };
+}
+
 export const testsInterface = {
   buildInputs: () => {
     const choices = {};
@@ -111,9 +133,7 @@ export const testsInterface = {
     }
 
     for (const save of ["fortitude", "reflex", "will"]) {
-      choices[`save.${save}`] = game.i18n.localize(
-        `PF2E.Saves${save.capitalize()}`,
-      );
+      choices[`save.${save}`] = game.i18n.localize(`PF2E.Saves${save.capitalize()}`);
     }
 
     choices["perception"] = game.i18n.localize("PF2E.PerceptionCheck");
@@ -136,20 +156,29 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
-    const options = inputs.dc != null ? { dc: inputs.dc } : {};
+    const rollOptions = {
+      skipDialog: options.fastForward ?? false,
+      event: options.event,
+    };
+    if (inputs.dc != null) rollOptions.dc = inputs.dc;
 
+    let roll;
     switch (type) {
       case "skill":
       case "save":
-        return actor.getStatistic(key)?.roll(options) ?? null;
+        roll = await actor.getStatistic(key)?.roll(rollOptions);
+        break;
 
       case "perception":
-        return actor.perception?.roll(options) ?? null;
+        roll = await actor.perception?.roll(rollOptions);
+        break;
 
       default:
         throw new Error(`Unsupported PF2E check type: ${type}`);
     }
+
+    return normalizeRoll(roll, inputs.dc);
   },
 };

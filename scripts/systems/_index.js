@@ -140,11 +140,22 @@ export const defaultTestsInterface = {
     dc: DefaultDCInput,
   }),
 
-  processCheck: async (actor, inputs) => {
-    const roll = new foundry.dice.Roll(inputs.formula, actor.getRollData?.());
-    await roll.evaluate();
+  processCheck: async (actor, inputs, options = {}) => {
+    const roll = await new foundry.dice.Roll(inputs.formula, actor.getRollData?.()).evaluate();
     await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
-    return roll;
+
+    const target = Number.isNumeric(inputs.dc) ? inputs.dc : null;
+    const success = target != null ? roll.total >= target : null;
+
+    return {
+      canceled: false,
+      result: roll.total,
+      target,
+      success,
+      levelOfSuccess: success == null ? null : success ? 100 : 0,
+      criticalSuccess: false,
+      criticalFailure: false,
+    };
   },
 };
 

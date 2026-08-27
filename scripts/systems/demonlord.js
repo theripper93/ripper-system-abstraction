@@ -81,6 +81,7 @@ class DemonlordCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -101,14 +102,20 @@ class DemonlordModifierInput extends DataModel {
   }
 }
 
+const DEMONLORD_ATTRIBUTES = {
+  strength: "DL.AttributeStrength",
+  agility: "DL.AttributeAgility",
+  intellect: "DL.AttributeIntellect",
+  will: "DL.AttributeWill",
+  perception: "DL.AttributePerception",
+};
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
-    for (const [key, attribute] of Object.entries(
-      actor.system.attributes ?? {},
-    )) {
-      choices[key] = game.i18n.localize(attribute.label ?? key);
+    for (const [key, label] of Object.entries(DEMONLORD_ATTRIBUTES)) {
+      choices[key] = game.i18n.localize(label);
     }
 
     class CheckInput extends DemonlordCheckInput {
@@ -129,14 +136,27 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const attribute = actor.getAttribute(inputs.check);
     if (!attribute) throw new Error(`Unknown Demon Lord attribute: ${inputs.check}`);
 
-    return actor.rollAttributeChallenge(
+    const roll = await actor.rollAttributeChallenge(
       attribute,
       undefined,
       inputs.modifier ?? 0,
     );
+
+    const target = game.settings.get("demonlord", "optionalRuleDieRollsMode") === "b" ? 11 : 10;
+    const success = !attribute.immune && roll.total >= target;
+
+    return {
+      canceled: false,
+      result: roll.total,
+      target,
+      success,
+      levelOfSuccess: success ? 100 : 0,
+      criticalSuccess: false,
+      criticalFailure: false,
+    };
   },
 };

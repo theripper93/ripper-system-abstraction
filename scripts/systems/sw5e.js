@@ -75,6 +75,7 @@ class SW5ECheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -96,12 +97,32 @@ class SW5EDCInput extends DataModel {
   }
 }
 
+function normalizeRoll(roll, dc) {
+  if (!roll) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const target = Number.isNumeric(roll.options?.targetValue) ? roll.options.targetValue : Number.isNumeric(dc) ? dc : null;
+  const criticalSuccess = roll.isCritical === true;
+  const criticalFailure = roll.isFumble === true;
+  const success = target != null ? roll.total >= target : null;
+
+  return {
+    canceled: false,
+    result: roll.total,
+    target,
+    success,
+    levelOfSuccess: success == null ? null : success ? 100 : 0,
+    criticalSuccess,
+    criticalFailure,
+  };
+}
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
     for (const [key, value] of Object.entries(CONFIG.SW5E.abilities)) {
-      if (actor?.system?.abilities?.[key] === undefined) continue;
       choices[`check.${key}`] = value;
       choices[`save.${key}`] = value;
     }
@@ -134,31 +155,37 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
-    const options = inputs.dc != null ? { targetValue: inputs.dc } : {};
+    const rollOptions = {
+      fastForward: options.fastForward ?? false,
+      event: options.event,
+    };
+    if (inputs.dc != null) rollOptions.targetValue = inputs.dc;
 
     switch (type) {
       case "skill":
-        return actor.rollSkill(key, options);
+        return normalizeRoll(await actor.rollSkill(key, rollOptions), inputs.dc);
 
       case "save":
         if (key === "death") {
-          return actor.rollDeathSave(options);
+          return normalizeRoll(await actor.rollDeathSave(rollOptions), 10);
         }
 
-        return actor.rollAbilitySave(key, options);
+        return normalizeRoll(await actor.rollAbilitySave(key, rollOptions), inputs.dc);
 
       case "check":
-        return actor.rollAbilityTest(key, options);
+        return normalizeRoll(await actor.rollAbilityTest(key, rollOptions), inputs.dc);
 
       case "tool": {
         const item = actor.items.find(
-          (i) =>
-            i.type === "tool" &&
-            (i.system.toolType === key || i.system.baseItem === key),
+          (i) => i.type === "tool" && (i.system.toolType === key || i.system.baseItem === key),
         );
-        return item ? item.rollToolCheck(options) : null;
+        if (!item) {
+          return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+        }
+
+        return normalizeRoll(await item.rollToolCheck(rollOptions), inputs.dc);
       }
 
       default:

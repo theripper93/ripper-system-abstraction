@@ -81,6 +81,7 @@ class DaggerheartCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -128,17 +129,35 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    const options = { dialog: { configure: false } };
-
+  processCheck: async (actor, inputs, options = {}) => {
+    const rollOptions = { event: options.event };
+    if (options.fastForward) rollOptions.dialog = { configure: false };
     if (inputs.difficulty != null) {
-      options.roll = {
+      rollOptions.roll = {
         trait: inputs.check,
         type: "trait",
         difficulty: inputs.difficulty,
       };
     }
 
-    return actor.rollTrait(inputs.check, options);
+    const result = await actor.rollTrait(inputs.check, rollOptions);
+    if (!result) {
+      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
+
+    const roll = result.roll;
+    const difficulty = inputs.difficulty ?? null;
+    const criticalSuccess = roll?.isCritical === true;
+    const success = criticalSuccess ? true : difficulty != null ? (roll?.total ?? 0) >= difficulty : null;
+
+    return {
+      canceled: false,
+      result: roll?.total ?? null,
+      target: difficulty,
+      success,
+      levelOfSuccess: success == null ? null : success ? 100 : 0,
+      criticalSuccess,
+      criticalFailure: false,
+    };
   },
 };

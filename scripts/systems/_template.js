@@ -312,12 +312,16 @@ export const dataPaths = {
 // `buildInputs` returns an object where each key represents a logical input
 // and each value is a Foundry DataModel class describing that input.
 //
+// The choices for each input are pulled from the game system's configuration
+// only - never from a specific actor. Checks that an actor cannot perform are
+// still listed.
+//
 // The generic API can use these DataModels to construct, render, and validate
 // the required UI without knowing anything about the underlying game system.
 //
 // Example:
 //
-//   buildInputs(actor) => ({
+//   buildInputs() => ({
 //     check: CheckInput,
 //     dc: DCInput,
 //   })
@@ -333,20 +337,45 @@ export const dataPaths = {
 // The meaning of each input is entirely system-specific.
 //
 // `processCheck` is responsible for translating the provided values into the
-// system's native check/roll API and executing the check.
+// system's native check/roll API, executing the check, and normalizing the
+// result.
 //
-// The returned value should be the native result produced by the system's
-// check/roll mechanism.
+// Options:
+//
+//   {
+//     fastForward: false,  Whether to skip the system's roll dialog if possible
+//     event: null,         An optional originating event passed to the native check
+//   }
+//
+// The options object is forwarded to the system's check method when that
+// method accepts an options argument.
+//
+// The returned value is a standardized result object:
+//
+//   {
+//     canceled: false,          Whether the check was canceled (dialog dismissed)
+//     result: 17,               The primary numeric outcome (roll total) if any
+//     target: 15,               The target/DC/threshold the result was compared against
+//     success: true,            Whether the check succeeded, or null if the system
+//                               cannot determine success
+//     levelOfSuccess: 67,       A 0-100 percentage. Each system normalizes its own
+//                               success levels (e.g. binary -> 0/100, 4 levels ->
+//                               0/33/66/100). Null if the system has no such concept.
+//     criticalSuccess: false,   Whether the outcome was a critical success
+//     criticalFailure: false,   Whether the outcome was a critical failure
+//   }
 //
 
 export const testsInterface = {
   /**
    * Returns the DataModel classes required to build a system check.
    *
-   * @param {Actor} actor
+   * Choices are derived from system configuration, never from a specific
+   * actor.
+   *
    * @returns {Object<string, typeof foundry.abstract.DataModel>}
    */
-  buildInputs: (actor) => ({}),
+  buildInputs: () => ({}),
 
   /**
    * Executes a system-specific check using the submitted input values.
@@ -356,9 +385,20 @@ export const testsInterface = {
    *
    * @param {Actor} actor
    * @param {Object<string, any>} inputs
-   * @returns {Promise<any>}
+   * @param {Object} [options]        Options for the check.
+   * @param {boolean} [options.fastForward]  Whether to skip the roll dialog if possible.
+   * @param {Event} [options.event]    An optional originating event.
+   * @returns {Promise<{
+   *   canceled: boolean,
+   *   result: number|null,
+   *   target: number|null,
+   *   success: boolean|null,
+   *   levelOfSuccess: number|null,
+   *   criticalSuccess: boolean,
+   *   criticalFailure: boolean,
+   * }>}
    */
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     throw new Error("processCheck is not implemented");
   },
 };

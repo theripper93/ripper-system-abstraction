@@ -81,6 +81,7 @@ class PF1CheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -100,6 +101,26 @@ class PF1DCInput extends DataModel {
       }),
     };
   }
+}
+
+function normalizeRoll(message, dc) {
+  if (!message) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const roll = message.rolls?.[0];
+  const target = Number.isNumeric(dc) ? dc : null;
+  const success = target != null ? roll.isSuccess : null;
+
+  return {
+    canceled: false,
+    result: roll.total,
+    target,
+    success,
+    levelOfSuccess: success == null ? null : success ? 100 : 0,
+    criticalSuccess: roll.isCrit === true,
+    criticalFailure: roll.isNat1 === true,
+  };
 }
 
 export const testsInterface = {
@@ -136,22 +157,32 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
-    const options = inputs.dc != null ? { dc: inputs.dc } : {};
+    const rollOptions = {
+      skipDialog: options.fastForward ?? false,
+      event: options.event,
+    };
+    if (inputs.dc != null) rollOptions.dc = inputs.dc;
 
+    let message;
     switch (type) {
       case "skill":
-        return actor.rollSkill(key, options);
+        message = await actor.rollSkill(key, rollOptions);
+        break;
 
       case "ability":
-        return actor.rollAbilityTest(key, options);
+        message = await actor.rollAbilityTest(key, rollOptions);
+        break;
 
       case "save":
-        return actor.rollSavingThrow(key, options);
+        message = await actor.rollSavingThrow(key, rollOptions);
+        break;
 
       default:
         throw new Error(`Unsupported PF1 check type: ${type}`);
     }
+
+    return normalizeRoll(message, inputs.dc);
   },
 };

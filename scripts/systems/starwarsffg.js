@@ -75,6 +75,7 @@ class StarWarsFFGCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -97,16 +98,14 @@ class StarWarsFFGDifficultyInput extends DataModel {
 }
 
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
-    for (const [key, characteristic] of Object.entries(
-      actor.system.characteristics ?? {},
-    )) {
+    for (const [key, characteristic] of Object.entries(CONFIG.FFG.characteristics)) {
       choices[`characteristic.${key}`] = characteristic.label ?? key;
     }
 
-    for (const [key, skill] of Object.entries(actor.system.skills ?? {})) {
+    for (const [key, skill] of Object.entries(CONFIG.FFG.skills)) {
       choices[`skill.${key}`] = skill.label ?? key;
     }
 
@@ -128,68 +127,55 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    const [type, key] = inputs.check.split(".");
-    const difficulty = inputs.difficulty ?? 2;
-
-    let sheet = {};
-    try {
-      sheet = actor.sheet ? await actor.sheet.getData() : {};
-    } catch (err) {
-      sheet = {};
+  processCheck: async (actor, inputs, options = {}) => {
+    const DicePoolFFG = window.DicePoolFFG;
+    if (!DicePoolFFG || !game.ffg?.RollFFG) {
+      return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
     }
 
+    const [type, key] = inputs.check.split(".");
+    const pool = new DicePoolFFG({ difficulty: inputs.difficulty ?? 2 });
+
+    let flavor;
     if (type === "characteristic") {
       const characteristic = actor.system.characteristics[key];
-      if (!characteristic) {
-        throw new Error(`Unknown Star Wars FFG characteristic: ${key}`);
-      }
+      if (!characteristic) throw new Error(`Unknown Star Wars FFG characteristic: ${key}`);
 
-      const skill = {
-        rank: 0,
-        boost: 0,
-        setback: 0,
-        force: 0,
-        advantage: 0,
-        dark: 0,
-        light: 0,
-        failure: 0,
-        threat: 0,
-        success: 0,
-        triumph: 0,
-        despair: 0,
-        remsetback: 0,
-        upgrades: 0,
-        label: characteristic.label,
-      };
-
-      return game.ffg.DiceHelpers.rollSkillDirect(
-        skill,
-        characteristic,
-        difficulty,
-        sheet,
-      );
-    }
-
-    if (type === "skill") {
+      pool.ability = characteristic.value ?? 0;
+      flavor = characteristic.label ?? key;
+    } else if (type === "skill") {
       const skill = actor.system.skills[key];
       if (!skill) throw new Error(`Unknown Star Wars FFG skill: ${key}`);
 
       const characteristic = actor.system.characteristics[skill.characteristic];
-      if (!characteristic) {
-        throw new Error(
-          `Unknown Star Wars FFG characteristic: ${skill.characteristic}`,
-        );
-      }
+      if (!characteristic) throw new Error(`Unknown Star Wars FFG characteristic: ${skill.characteristic}`);
 
-      return game.ffg.DiceHelpers.rollSkillDirect(
-        skill,
-        characteristic,
-        difficulty,
-        sheet,
-      );
+      const charValue = characteristic.value ?? 0;
+      const rank = skill.rank ?? 0;
+      pool.ability = Math.max(charValue, rank);
+      pool.boost = skill.boost ?? 0;
+      pool.setback = skill.setback ?? 0;
+      if (Math.min(charValue, rank) + (pool.upgrades ?? 0) > 0) {
+        pool.upgrade(Math.min(charValue, rank) + (pool.upgrades ?? 0));
+      }
+      flavor = skill.label ?? key;
+    } else {
+      throw new Error(`Unsupported Star Wars FFG check type: ${type}`);
     }
 
-    throw new Error(`Unsupported Star Wars FFG check type: ${type}`);
+    const roll = new game.ffg.RollFFG(pool.renderDiceExpression(), null, pool, flavor);
+    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
+
+    const netSuccesses = roll.ffg?.success ?? 0;
+
+    return {
+      canceled: false,
+      result: netSuccesses,
+      target: null,
+      success: netSuccesses > 0,
+      levelOfSuccess: Math.clamp(50 + netSuccesses * 15, 0, 100),
+      criticalSuccess: (roll.ffg?.triumph ?? 0) > 0,
+      criticalFailure: (roll.ffg?.despair ?? 0) > 0,
+    };
   },
 };

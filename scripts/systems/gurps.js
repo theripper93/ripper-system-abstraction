@@ -70,18 +70,19 @@ export const dataPaths = {
 };
 
 const GURPS_ATTRIBUTES = {
-  ST: "GURPS.attributesST",
-  DX: "GURPS.attributesDX",
-  IQ: "GURPS.attributesIQ",
-  HT: "GURPS.attributesHT",
-  WILL: "GURPS.attributesWILL",
-  PER: "GURPS.attributesPER",
+  ST: "GURPS.attributesSTNAME",
+  DX: "GURPS.attributesDXNAME",
+  IQ: "GURPS.attributesIQNAME",
+  HT: "GURPS.attributesHTNAME",
+  WILL: "GURPS.attributesWILLNAME",
+  PER: "GURPS.attributesPERNAME",
 };
 
 class GURPSCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -103,16 +104,11 @@ class GURPSModifierInput extends DataModel {
 }
 
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
     for (const [key, label] of Object.entries(GURPS_ATTRIBUTES)) {
       choices[key] = game.i18n.localize(label);
-    }
-
-    const skills = GURPS.flattenContainedList?.(actor.system.skills) ?? [];
-    for (const skill of skills) {
-      choices[`sk.${skill.name}`] = skill.name;
     }
 
     class CheckInput extends GURPSCheckInput {
@@ -133,16 +129,43 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     let modifier = "";
     if (inputs.modifier != null && inputs.modifier !== 0) {
       modifier = inputs.modifier > 0 ? `+${inputs.modifier}` : `${inputs.modifier}`;
     }
 
-    const otf = inputs.check.startsWith("sk.")
-      ? `Sk:"${inputs.check.slice(3)}"${modifier}`
+    const target = actor.system.attributes?.[inputs.check]?.value;
+    const otf = options.fastForward
+      ? `${inputs.check}${Number.isNumeric(target) ? target : ""}${modifier}`
       : `${inputs.check}${modifier}`;
 
-    return actor.runOTF(otf);
+    const result = await GURPS.performAction(
+      GURPS.parselink(otf).action,
+      options.fastForward ? null : actor,
+      options.event,
+    );
+
+    const last = GURPS.lastTargetedRoll;
+    if (!last || (result === undefined && !options.fastForward)) {
+      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
+
+    const success = !last.failure;
+    const levelOfSuccess = last.isCritSuccess
+      ? 100
+      : last.isCritFailure
+        ? 0
+        : Math.clamp(50 + (last.margin ?? 0), 0, 100);
+
+    return {
+      canceled: false,
+      result: last.rtotal ?? null,
+      target: last.finaltarget ?? null,
+      success,
+      levelOfSuccess,
+      criticalSuccess: last.isCritSuccess === true,
+      criticalFailure: last.isCritFailure === true,
+    };
   },
 };

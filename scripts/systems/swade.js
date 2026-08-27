@@ -75,6 +75,7 @@ class SwadeCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -95,17 +96,40 @@ class SwadeModifierInput extends DataModel {
   }
 }
 
+function normalizeRoll(roll) {
+  if (!roll) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const successes = roll.successes ?? 0;
+  const success = successes >= 1;
+
+  return {
+    canceled: false,
+    result: roll.total,
+    target: roll.targetNumber ?? 4,
+    success,
+    levelOfSuccess: successes <= 0 ? 0 : Math.min(50 + (successes - 1) * 25, 100),
+    criticalSuccess: false,
+    criticalFailure: successes === -1,
+  };
+}
+
 export const testsInterface = {
-  buildInputs: (actor) => {
+  buildInputs: () => {
     const choices = {};
 
     for (const [key, value] of Object.entries(CONFIG.SWADE.attributes)) {
       choices[key] = game.i18n.localize(value.long);
     }
 
-    for (const item of actor.items.filter((i) => i.type === "skill")) {
-      choices[item.id] = item.name;
-      if (item.system.swid) choices[item.system.swid] = item.name;
+    const pack = game.packs.get("swade.skills");
+    if (pack?.indexed) {
+      const index = pack.index instanceof Map ? pack.index.values() : pack.index;
+      for (const entry of index) {
+        if (entry.type !== "skill") continue;
+        choices[entry.system?.swid ?? entry.name] = entry.name;
+      }
     }
 
     class CheckInput extends SwadeCheckInput {
@@ -126,28 +150,34 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
-    const options = {};
+  processCheck: async (actor, inputs, options = {}) => {
+    const rollOptions = { event: options.event };
     if (inputs.modifier != null) {
-      options.additionalMods = [
+      rollOptions.additionalMods = [
         {
           label: game.i18n.localize("SWADE.Modifier"),
           value: inputs.modifier,
         },
       ];
     }
+    if (options.fastForward) rollOptions.suppressChat = true;
 
+    let roll;
     if (inputs.check in CONFIG.SWADE.attributes) {
-      return actor.rollAttribute(inputs.check, options);
+      roll = await actor.rollAttribute(inputs.check, rollOptions);
+    } else {
+      const item = actor.getSingleItemBySwid?.(inputs.check, "skill");
+      roll = item
+        ? await item.roll(rollOptions)
+        : await actor.rollSkill(inputs.check, rollOptions);
     }
 
-    const item =
-      actor.items.get(inputs.check) ??
-      actor.getSingleItemBySwid?.(inputs.check, "skill") ??
-      actor.items.find(
-        (i) => i.type === "skill" && i.name === inputs.check,
-      );
+    if (roll && options.fastForward) {
+      await roll.evaluate();
+      roll.targetNumber ??= 4;
+      return normalizeRoll(roll);
+    }
 
-    return item ? item.roll(options) : actor.rollSkill(inputs.check, options);
+    return normalizeRoll(roll);
   },
 };

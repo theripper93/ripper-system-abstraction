@@ -75,6 +75,7 @@ class ImpMalCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -95,13 +96,31 @@ class ImpMalModifierInput extends DataModel {
   }
 }
 
+function normalizeTest(test) {
+  if (!test?.result) {
+    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+  }
+
+  const result = test.result;
+  const success = result.outcome === "success";
+  const sl = Number(result.SL) || 0;
+
+  return {
+    canceled: false,
+    result: result.roll,
+    target: result.target,
+    success,
+    levelOfSuccess: Math.clamp(50 + sl * 10, 0, 100),
+    criticalSuccess: false,
+    criticalFailure: false,
+  };
+}
+
 export const testsInterface = {
   buildInputs: () => {
     const choices = {};
 
-    for (const [key, label] of Object.entries(
-      game.impmal.config.characteristics,
-    )) {
+    for (const [key, label] of Object.entries(game.impmal.config.characteristics)) {
       choices[`char.${key}`] = game.i18n.localize(label);
     }
 
@@ -127,22 +146,30 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
-    const fields = { difficulty: "challenging" };
-    if (inputs.modifier != null) fields.modifier = inputs.modifier;
+    const context = {
+      skipDialog: options.fastForward ?? false,
+      skipTargets: true,
+      event: options.event,
+      fields: { difficulty: "challenging" },
+    };
+    if (inputs.modifier != null) context.fields.modifier = inputs.modifier;
 
-    const context = { skipDialog: true, skipTargets: true, fields };
-
+    let test;
     switch (type) {
       case "char":
-        return actor.setupCharacteristicTest(key, context);
+        test = await actor.setupCharacteristicTest(key, context);
+        break;
 
       case "skill":
-        return actor.setupSkillTest({ key }, context);
+        test = await actor.setupSkillTest({ key }, context);
+        break;
 
       default:
         throw new Error(`Unsupported Imperium Maledictum check type: ${type}`);
     }
+
+    return normalizeTest(test);
   },
 };

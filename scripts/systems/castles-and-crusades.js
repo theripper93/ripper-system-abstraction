@@ -81,6 +81,7 @@ class CastlesAndCrusadesCheckInput extends DataModel {
   static defineSchema() {
     return {
       value: new fields.StringField({
+        label: "Check",
         required: true,
         choices,
       }),
@@ -128,7 +129,7 @@ export const testsInterface = {
     };
   },
 
-  processCheck: async (actor, inputs) => {
+  processCheck: async (actor, inputs, options = {}) => {
     const data = actor.getRollData();
     const ability = data.abilities?.[inputs.check];
     if (!ability) throw new Error(`Unknown C&C ability: ${inputs.check}`);
@@ -140,28 +141,42 @@ export const testsInterface = {
 
     const isPrime = Boolean(ability.ccprimary);
     const base = isPrime
-      ? game.settings.get("castles-and-crusades", "primeSiegeChallengeBase") ??
-        12
-      : game.settings.get(
-          "castles-and-crusades",
-          "secondarySiegeChallengeBase",
-        ) ?? 18;
+      ? game.settings.get("castles-and-crusades", "primeSiegeChallengeBase") ?? 12
+      : game.settings.get("castles-and-crusades", "secondarySiegeChallengeBase") ?? 18;
     const challengeClass = base + (inputs.dc ?? 0);
 
-    await roll.toMessage({
-      speaker: ChatMessage.getSpeaker({ actor }),
-      flavor: game.i18n.format("TLGCC.SiegeCheck", {
-        ability: game.i18n.localize(
-          `TLGCC.Ability${inputs.check.capitalize()}`,
-        ),
-        cc: challengeClass,
-      }),
-    });
+    let chatMessage = null;
+    try {
+      const module = await import("/systems/castles-and-crusades/scripts/actor-siege-workflow.js");
+      const createChatCard = module.createSiegeCheckChatCard;
+      if (createChatCard) {
+        chatMessage = await createChatCard({
+          actor,
+          abilityLabel: game.i18n.localize(`TLGCC.Ability${inputs.check.capitalize()}`),
+          isPrime,
+          challengeBase: base,
+          challengeLevel: inputs.dc ?? 0,
+          challengeModifier: 0,
+          roll,
+          rollMode: game.settings.get("core", "rollMode"),
+        });
+      }
+    } catch (err) {
+      chatMessage = null;
+    }
+
+    if (!chatMessage) {
+      await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
+    }
 
     return {
-      roll,
-      challengeClass,
+      canceled: false,
+      result: roll.total,
+      target: challengeClass,
       success: roll.total >= challengeClass,
+      levelOfSuccess: roll.total >= challengeClass ? 100 : 0,
+      criticalSuccess: false,
+      criticalFailure: false,
     };
   },
 };
