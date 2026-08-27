@@ -22,37 +22,22 @@ export default async function CoC7() {
   class CoC7DCInput extends DataModel {
     static defineSchema() {
       return {
-        value: new fields.NumberField({
+        value: new fields.StringField({
           label: "ripper-system-abstraction.tests.Difficulty",
-          required: false,
-          nullable: true,
-          integer: true,
-          min: 0,
+          required: true,
+          initial: "regular",
+          choices: {
+            regular: game.i18n.localize("CoC7.RollDifficultyRegular"),
+            hard: game.i18n.localize("CoC7.RollDifficultyHard"),
+            extreme: game.i18n.localize("CoC7.RollDifficultyExtreme"),
+            critical: game.i18n.localize("CoC7.RollDifficultyCritical"),
+          },
         }),
       };
     }
   }
 
   const SUCCESS_LEVEL_MAP = { 4: 100, 3: 75, 2: 50, 1: 25, 0: 0, "-99": 0 };
-
-  function normalizeCheck(check) {
-    if (!check) {
-      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-    }
-
-    const success = check.isSuccess;
-    const level = SUCCESS_LEVEL_MAP[check.successLevel] ?? 0;
-
-    return {
-      canceled: false,
-      result: check.total,
-      target: null,
-      success,
-      levelOfSuccess: level,
-      criticalSuccess: check.isCritical === true,
-      criticalFailure: check.isFumble === true,
-    };
-  }
 
   return {
     dataPaths: {
@@ -169,28 +154,58 @@ export default async function CoC7() {
 
   processCheck: async (actor, inputs, options = {}) => {
     const [type, key] = inputs.check.split(".");
-    const difficulty = inputs.dc == null ? 1 : Math.clamp(inputs.dc, 1, 4);
-    const checkOptions = { difficulty, event: options.event };
+    const DIFFICULTY_LEVELS = { regular: 1, hard: 2, extreme: 3, critical: 4 };
+    const difficulty = DIFFICULTY_LEVELS[inputs.dc] ?? 1;
 
-    let check;
-    switch (type) {
-      case "characteristic":
-        check = await actor.characteristicCheck(key, options.fastForward ?? false, checkOptions);
-        break;
-
-      case "attribute":
-        check = await actor.attributeCheck(key, options.fastForward ?? false, checkOptions);
-        break;
-
-      case "skill":
-        check = await actor.skillCheck(key, options.fastForward ?? false, checkOptions);
-        break;
-
-      default:
-        throw new Error(`Unsupported CoC7 check type: ${type}`);
+    let value;
+    let label = key;
+    if (type === "characteristic") {
+      value = actor.system.characteristics?.[key]?.value;
+      label = game.i18n.localize(actor.system.schema?.getField("characteristics")?.getField(key)?.hint ?? key);
+    } else if (type === "attribute") {
+      value = actor.system.attribs?.[key]?.value;
+      label = game.i18n.localize(actor.system.schema?.getField("attribs")?.getField(key)?.hint ?? key);
+    } else if (type === "skill") {
+      value = actor.items.find((i) => i.type === "skill" && i.name === key)?.system?.value ?? 0;
+    } else {
+      throw new Error(`Unsupported CoC7 check type: ${type}`);
     }
 
-    return normalizeCheck(check);
+    if (typeof value !== "number") {
+      throw new Error(`Unknown CoC7 ${type}: ${key}`);
+    }
+
+    const regular = value;
+    const hard = Math.floor(value / 2);
+    const extreme = Math.floor(value / 5);
+    const effective = difficulty === 2 ? hard : difficulty === 3 ? extreme : difficulty === 4 ? 1 : regular;
+    const fumbleAt = effective < 50 ? 96 : 100;
+
+    const roll = await new Roll("1d100").evaluate();
+    const total = roll.total;
+
+    const successLevel =
+      total >= fumbleAt ? -99
+      : total === 1 ? (regular > 1 ? 4 : 1)
+      : total <= extreme ? 3
+      : total <= hard ? 2
+      : total <= regular ? 1
+      : 0;
+
+    await roll.toMessage({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      flavor: label,
+    });
+
+    return {
+      canceled: false,
+      result: total,
+      target: effective,
+      success: successLevel >= difficulty,
+      levelOfSuccess: SUCCESS_LEVEL_MAP[successLevel] ?? 0,
+      criticalSuccess: successLevel === 4,
+      criticalFailure: successLevel === -99,
+    };
   },
 },
   };

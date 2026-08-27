@@ -25,11 +25,19 @@ export default async function wfrp4e() {
   class WFRP4eDCInput extends DataModel {
     static defineSchema() {
       return {
-        value: new fields.NumberField({
+        value: new fields.StringField({
           label: "ripper-system-abstraction.tests.Difficulty",
-          required: false,
-          nullable: true,
-          integer: true,
+          required: true,
+          initial: "challenging",
+          choices: {
+            veasy: game.i18n.localize("DIFFICULTY.VEasy"),
+            easy: game.i18n.localize("DIFFICULTY.Easy"),
+            average: game.i18n.localize("DIFFICULTY.Average"),
+            challenging: game.i18n.localize("DIFFICULTY.Challenging"),
+            difficult: game.i18n.localize("DIFFICULTY.Difficult"),
+            hard: game.i18n.localize("DIFFICULTY.Hard"),
+            vhard: game.i18n.localize("DIFFICULTY.VHard"),
+          },
         }),
       };
     }

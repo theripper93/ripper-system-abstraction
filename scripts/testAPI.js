@@ -77,7 +77,7 @@ function sampleFieldValue(field) {
 
 async function testData(actor) {
   const testPath = api.health.getCurrent(actor) != null
-    ? "attributes.hp.value"
+    ? getDataPaths()?.health?.current
     : null;
 
   if (testPath) {
@@ -237,7 +237,7 @@ async function testCurrencyActor(actor) {
   const base = config.base;
   const actorDenoms = config.actor?.denominations ?? {};
 
-  if (!base || !Object.keys(actorDenoms).length) {
+  if (!base || (!Object.keys(actorDenoms).length && !config.actor?.handler)) {
     skip("currency.actor", "system stores no actor currency");
     return;
   }
@@ -523,10 +523,10 @@ async function testTestsInterface(actor) {
 /* runner                                                                    */
 /* ------------------------------------------------------------------------- */
 
-export async function runAPITests() {
+export async function runAPITests(actor) {
   results.length = 0;
 
-  const actor = getTestActor();
+  actor ??= getTestActor();
   if (!actor) {
     fail("setup", "no actor available (game.user.character or first game.actors entry)");
     printSummary();

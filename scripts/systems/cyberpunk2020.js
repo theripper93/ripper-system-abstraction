@@ -35,7 +35,50 @@ export default async function cyberpunk2020() {
     }
   }
 
+  class Cyberpunk2020DifficultyInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.StringField({
+          label: "ripper-system-abstraction.tests.Difficulty",
+          required: true,
+          initial: "easy",
+          choices: {
+            easy: game.i18n.localize("ripper-system-abstraction.tests.DCClassEasy"),
+            average: game.i18n.localize("ripper-system-abstraction.tests.DCClassAverage"),
+            difficult: game.i18n.localize("ripper-system-abstraction.tests.DCClassDifficult"),
+            verydifficult: game.i18n.localize("ripper-system-abstraction.tests.DCClassVeryDifficult"),
+            nearlyimpossible: game.i18n.localize("ripper-system-abstraction.tests.DCClassNearlyImpossible"),
+          },
+        }),
+      };
+    }
+  }
+
   const CYBERPUNK_STATS = ["int", "ref", "tech", "cool", "attr", "luck", "ma", "bt", "emp"];
+
+  const DIFFICULTY_CLASSES = {
+    easy: 10,
+    average: 15,
+    difficult: 20,
+    verydifficult: 25,
+    nearlyimpossible: 30,
+  };
+
+  function difficultyResult(roll, difficulty) {
+    const target = DIFFICULTY_CLASSES[difficulty] ?? null;
+    const margin = target != null ? roll.total - target : null;
+    const success = target != null ? roll.total >= target : null;
+    const levelOfSuccess =
+      success === true
+        ? margin >= 21 ? 100
+        : margin >= 16 ? 90
+        : margin >= 11 ? 80
+        : margin >= 6 ? 65
+        : 50
+        : success === false ? 0
+        : null;
+    return { target, success, levelOfSuccess };
+  }
 
   return {
     dataPaths: {
@@ -143,6 +186,7 @@ export default async function cyberpunk2020() {
       return {
         check: CheckInput,
         modifier: Cyberpunk2020ModifierInput,
+        difficulty: Cyberpunk2020DifficultyInput,
       };
     },
 
@@ -167,12 +211,13 @@ export default async function cyberpunk2020() {
           return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
         }
 
+        const { target, success, levelOfSuccess } = difficultyResult(roll, inputs.difficulty);
         return {
           canceled: false,
           result: roll.total,
-          target: null,
-          success: null,
-          levelOfSuccess: null,
+          target,
+          success,
+          levelOfSuccess,
           criticalSuccess: roll.isCrit === true,
           criticalFailure: roll.isFumble === true,
         };
@@ -201,12 +246,13 @@ export default async function cyberpunk2020() {
           return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
         }
 
+        const { target, success, levelOfSuccess } = difficultyResult(roll, inputs.difficulty);
         return {
           canceled: false,
           result: roll.total,
-          target: null,
-          success: null,
-          levelOfSuccess: null,
+          target,
+          success,
+          levelOfSuccess,
           criticalSuccess: roll.isCrit === true,
           criticalFailure: roll.isFumble === true,
         };

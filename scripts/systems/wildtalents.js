@@ -143,12 +143,13 @@ export default async function wildtalents() {
 
       let success = null;
       try {
-        const module = await import("/systems/wildtalents/rolls/ORERoll.mjs");
-        const ORERoll = module.ORERoll ?? module.default?.ORERoll ?? module.default;
-        if (ORERoll?.fromRollFlavor) {
-          const roll = ORERoll.fromRollFlavor(message.rolls[0]);
-          success = roll?.isSuccess === true;
-        }
+        const data = JSON.parse(message.rolls[0].terms[0].flavor);
+        const minWidth = data.minWidth ?? 2;
+        const minHeight = data.minHeight ?? 1;
+        success = (data.sets ?? []).some((set) => {
+          const height = set.find((d) => d.face !== "*")?.face ?? "*";
+          return set.length >= minWidth && (height === "*" || height >= minHeight);
+        });
       } catch (err) {
         success = null;
       }

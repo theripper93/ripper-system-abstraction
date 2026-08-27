@@ -65,12 +65,16 @@ async function openTestsDebugDialog() {
                 action: "test",
                 label: "ripper-system-abstraction.tests.RunAPITests",
                 icon: "fa-solid fa-vial",
-                callback: (event, button, dlg) => runAPITests(),
+                callback: (event, button, dlg) => {
+                    const actor = game.actors.get(dlg.element.querySelector("#ripper-tests-actor").value);
+                    runAPITests(actor);
+                },
             },
         ],
     });
 
     await dialog.render(true);
+    dialog.close = () => {};
     initTestsDialog(dialog.element);
 }
 

@@ -78,15 +78,28 @@ export default async function pf2e() {
       equipped: "equipped.carryType",
       attuned: "equipped.invested",
 
-      uses: "uses.value",
-      maximumUses: "uses.max",
+      uses: "",
+      maximumUses: "",
     },
 
     currency: {
       base: "cp",
 
       actor: {
-        denominations: {},
+        denominations: {
+          cp: "currency.cp",
+          sp: "currency.sp",
+          gp: "currency.gp",
+          pp: "currency.pp",
+        },
+        handler: {
+          get: (actor) => {
+            const coins = actor.inventory?.currency;
+            return coins ? { cp: coins.cp, sp: coins.sp, gp: coins.gp, pp: coins.pp } : {};
+          },
+          add: (actor, amounts) => actor.inventory.addCurrency(amounts, { combineStacks: true }),
+          remove: (actor, amounts) => actor.inventory.removeCurrency(amounts, { byValue: true }),
+        },
       },
 
       item: {

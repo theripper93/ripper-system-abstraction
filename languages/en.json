@@ -22,7 +22,12 @@
             "SerializedValue": "Serialized value",
             "Result": "Result",
             "RunCheck": "Run Check",
-            "RunAPITests": "Run API Tests"
+            "RunAPITests": "Run API Tests",
+            "DCClassEasy": "Easy",
+            "DCClassAverage": "Average",
+            "DCClassDifficult": "Difficult",
+            "DCClassVeryDifficult": "Very Difficult",
+            "DCClassNearlyImpossible": "Nearly Impossible"
         }
     }
 }

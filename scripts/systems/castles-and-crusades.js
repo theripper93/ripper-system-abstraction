@@ -147,29 +147,11 @@ export default async function castlesAndCrusades() {
         : game.settings.get("castles-and-crusades", "secondarySiegeChallengeBase") ?? 18;
       const challengeClass = base + (inputs.dc ?? 0);
 
-      let chatMessage = null;
-      try {
-        const module = await import("/systems/castles-and-crusades/scripts/actor-siege-workflow.js");
-        const createChatCard = module.createSiegeCheckChatCard;
-        if (createChatCard) {
-          chatMessage = await createChatCard({
-            actor,
-            abilityLabel: game.i18n.localize(`TLGCC.Ability${inputs.check.capitalize()}`),
-            isPrime,
-            challengeBase: base,
-            challengeLevel: inputs.dc ?? 0,
-            challengeModifier: 0,
-            roll,
-            rollMode: game.settings.get("core", "rollMode"),
-          });
-        }
-      } catch (err) {
-        chatMessage = null;
-      }
-
-      if (!chatMessage) {
-        await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
-      }
+      await roll.toMessage({
+        speaker: ChatMessage.getSpeaker({ actor }),
+        rollMode: game.settings.get("core", "rollMode"),
+        flavor: `${game.i18n.localize(`TLGCC.Ability${inputs.check.capitalize()}`)} — CL ${challengeClass}`,
+      });
 
       return {
         canceled: false,

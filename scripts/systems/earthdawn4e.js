@@ -166,22 +166,26 @@ export default async function earthdawn4e() {
         return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
       }
 
-      const module = await import("/systems/earthdawn4e/modules/helpers/roll-dice.js");
-      const rollDice = module.rollDice ?? module.default?.rollDice;
-      if (!rollDice) {
-        return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-      }
+      const wounds = actor.woundCalc?.(Number(actor.system.wounds) + Number(actor.system.bloodMagicWounds)) ?? 0;
+      const finalstep = Math.max(
+        1,
+        (actor.system[inputs.check] ?? 0) +
+          (inputs.modifier ?? 0) -
+          wounds +
+          (Number(actor.system.bonuses?.allRollsStepFinal) ?? 0)
+      );
 
-      const finalstep = (actor.system[inputs.check] ?? 0) + (inputs.modifier ?? 0);
-      const result = await rollDice(actor, {
-        finalstep: Math.max(1, finalstep),
-        difficulty: inputs.difficulty ?? 0,
-        name: game.i18n.localize(EARTHDAWN_ATTRIBUTES[inputs.check]),
+      const dice = actor.getDice(finalstep);
+      const roll = await new Roll(dice ? dice.replace(/(d\d+)/g, "$1x") : "0").evaluate();
+      const total = Math.max(1, roll.total);
+
+      await roll.toMessage({
+        speaker: ChatMessage.getSpeaker({ actor }),
+        flavor: game.i18n.localize(EARTHDAWN_ATTRIBUTES[inputs.check]),
       });
 
-      if (!result) {
-        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-      }
+      const margin = inputs.difficulty > 0 ? total - inputs.difficulty : undefined;
+      const result = { total, margin };
 
       const difficulty = inputs.difficulty ?? 0;
       const success = difficulty > 0 ? result.total >= difficulty : null;

@@ -10,6 +10,10 @@ function currencyConfig(dp) {
   return dp.currency ?? {};
 }
 
+function actorHandler(config) {
+  return config.actor?.handler ?? null;
+}
+
 function denominationRatio(config, name) {
   const entry = config.denominations?.[name];
   return typeof entry?.value === "number" ? entry.value : 1;
@@ -33,6 +37,8 @@ export const currency = {
    */
   get(actor) {
     const config = currencyConfig(resolveDataPaths(actor));
+    const handler = actorHandler(config);
+    if (handler) return handler.get(actor) ?? {};
     const actorDenominations = config.actor?.denominations ?? {};
     const result = {};
     for (const [name, path] of Object.entries(actorDenominations)) {
@@ -51,6 +57,17 @@ export const currency = {
   getTotal(actor) {
     const dp = resolveDataPaths(actor);
     const config = currencyConfig(dp);
+    const handler = actorHandler(config);
+    if (handler) {
+      const amounts = handler.get(actor) ?? {};
+      let total = 0;
+      for (const [name, amount] of Object.entries(amounts)) {
+        if (typeof amount === "number") {
+          total += amount * denominationRatio(config, name);
+        }
+      }
+      return total;
+    }
     const actorDenominations = config.actor?.denominations ?? {};
     let total = 0;
     for (const [name, path] of Object.entries(actorDenominations)) {
@@ -74,6 +91,17 @@ export const currency = {
    */
   set(actor, currency = {}, options = {}) {
     const config = currencyConfig(resolveDataPaths(actor));
+    const handler = actorHandler(config);
+    if (handler) {
+      const current = handler.get(actor) ?? {};
+      const operations = [];
+      for (const [name, target] of Object.entries(currency)) {
+        const delta = target - (current[name] ?? 0);
+        if (delta > 0) operations.push(handler.add(actor, { [name]: delta }));
+        else if (delta < 0) operations.push(handler.remove(actor, { [name]: -delta }));
+      }
+      return Promise.all(operations);
+    }
     const actorDenominations = config.actor?.denominations ?? {};
     const changes = {};
     for (const [name, amount] of Object.entries(currency)) {
@@ -97,6 +125,8 @@ export const currency = {
    */
   add(actor, currency = {}, options = {}) {
     const config = currencyConfig(resolveDataPaths(actor));
+    const handler = actorHandler(config);
+    if (handler) return handler.add(actor, currency);
     const actorDenominations = config.actor?.denominations ?? {};
     const changes = {};
     for (const [name, amount] of Object.entries(currency)) {
@@ -124,6 +154,20 @@ export const currency = {
    */
   remove(actor, currency = {}, options = {}) {
     const config = currencyConfig(resolveDataPaths(actor));
+    const handler = actorHandler(config);
+    if (handler) {
+      const settled = Promise.all(
+        Object.entries(currency)
+          .filter(([, amount]) => amount > 0)
+          .map(async ([name, amount]) => {
+            const ok = await handler.remove(actor, { [name]: amount });
+            if (!ok) {
+              throw unsupported(actor, "currency.remove", `insufficient funds to remove ${name}`);
+            }
+          }),
+      );
+      return options.update === false ? Promise.resolve({}) : settled;
+    }
     const actorDenominations = config.actor?.denominations ?? {};
     const changes = {};
 
