@@ -1,171 +1,175 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
-export const dataPaths = {
-  actor: {
-    type: "",
-    subtype: "",
-    size: "traits.sizemod",
-    level: "",
-    role: "",
-  },
+export default async function gurps() {
 
-  health: {
-    current: "HP.value",
-    maximum: "HP.max",
-    temporary: "",
-    minimum: "HP.min",
+  const GURPS_ATTRIBUTES = {
+    ST: "GURPS.attributesSTNAME",
+    DX: "GURPS.attributesDXNAME",
+    IQ: "GURPS.attributesIQNAME",
+    HT: "GURPS.attributesHTNAME",
+    WILL: "GURPS.attributesWILLNAME",
+    PER: "GURPS.attributesPERNAME",
+  };
 
-    useWounds: false,
-    wounds: "",
-    maximumWounds: "",
-  },
+  class GURPSCheckInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.StringField({
+          label: "ripper-system-abstraction.tests.Check",
+          required: true,
+          choices,
+        }),
+      };
+    }
+  }
 
-  item: {
-    quantity: "eqt.count",
-    weight: "eqt.weight",
+  class GURPSModifierInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.NumberField({
+          label: "ripper-system-abstraction.tests.Modifier",
+          required: false,
+          nullable: true,
+          integer: true,
+        }),
+      };
+    }
+  }
 
-    equipped: "eqt.equipped",
-    attuned: "",
-
-    uses: "eqt.uses",
-    maximumUses: "eqt.maxuses",
-  },
-
-  currency: {
-    base: "$",
-
+  return {
+    dataPaths: {
     actor: {
-      denominations: {},
+      type: "",
+      subtype: "",
+      size: "traits.sizemod",
+      level: "",
+      role: "",
+    },
+
+    health: {
+      current: "HP.value",
+      maximum: "HP.max",
+      temporary: "",
+      minimum: "HP.min",
+
+      useWounds: false,
+      wounds: "",
+      maximumWounds: "",
     },
 
     item: {
-      single: {
-        value: "eqt.cost",
-        denomination: "$",
+      quantity: "eqt.count",
+      weight: "eqt.weight",
+
+      equipped: "eqt.equipped",
+      attuned: "",
+
+      uses: "eqt.uses",
+      maximumUses: "eqt.maxuses",
+    },
+
+    currency: {
+      base: "$",
+
+      actor: {
+        denominations: {},
       },
 
-      denominations: {},
+      item: {
+        single: {
+          value: "eqt.cost",
+          denomination: "$",
+        },
+
+        denominations: {},
+      },
+
+      denominations: {
+        "$": { value: 1 },
+      },
     },
 
-    denominations: {
-      "$": { value: 1 },
+    experience: {
+      current: "totalpoints.unspent",
+      maximum: "",
+      level: "",
     },
-  },
 
-  experience: {
-    current: "totalpoints.unspent",
-    maximum: "",
-    level: "",
-  },
+    features: {
+      supportsHealth: true,
+      supportsTemporaryHealth: false,
+      supportsWounds: false,
+      supportsCurrency: false,
+      supportsWeight: true,
+      supportsEquipment: true,
+    },
+    },
+    testsInterface: {
+    buildInputs: () => {
+      const choices = {};
 
-  features: {
-    supportsHealth: true,
-    supportsTemporaryHealth: false,
-    supportsWounds: false,
-    supportsCurrency: false,
-    supportsWeight: true,
-    supportsEquipment: true,
-  },
-};
-
-const GURPS_ATTRIBUTES = {
-  ST: "GURPS.attributesSTNAME",
-  DX: "GURPS.attributesDXNAME",
-  IQ: "GURPS.attributesIQNAME",
-  HT: "GURPS.attributesHTNAME",
-  WILL: "GURPS.attributesWILLNAME",
-  PER: "GURPS.attributesPERNAME",
-};
-
-class GURPSCheckInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.StringField({
-        label: "Check",
-        required: true,
-        choices,
-      }),
-    };
-  }
-}
-
-class GURPSModifierInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.NumberField({
-        label: "Modifier",
-        required: false,
-        nullable: true,
-        integer: true,
-      }),
-    };
-  }
-}
-
-export const testsInterface = {
-  buildInputs: () => {
-    const choices = {};
-
-    for (const [key, label] of Object.entries(GURPS_ATTRIBUTES)) {
-      choices[key] = game.i18n.localize(label);
-    }
-
-    class CheckInput extends GURPSCheckInput {
-      static defineSchema() {
-        return {
-          value: new fields.StringField({
-            label: "Check",
-            required: true,
-            choices,
-          }),
-        };
+      for (const [key, label] of Object.entries(GURPS_ATTRIBUTES)) {
+        choices[key] = game.i18n.localize(label);
       }
-    }
 
-    return {
-      check: CheckInput,
-      modifier: GURPSModifierInput,
-    };
-  },
+      class CheckInput extends GURPSCheckInput {
+        static defineSchema() {
+          return {
+            value: new fields.StringField({
+              label: "ripper-system-abstraction.tests.Check",
+              required: true,
+              choices,
+            }),
+          };
+        }
+      }
 
-  processCheck: async (actor, inputs, options = {}) => {
-    let modifier = "";
-    if (inputs.modifier != null && inputs.modifier !== 0) {
-      modifier = inputs.modifier > 0 ? `+${inputs.modifier}` : `${inputs.modifier}`;
-    }
+      return {
+        check: CheckInput,
+        modifier: GURPSModifierInput,
+      };
+    },
 
-    const target = actor.system.attributes?.[inputs.check]?.value;
-    const otf = options.fastForward
-      ? `${inputs.check}${Number.isNumeric(target) ? target : ""}${modifier}`
-      : `${inputs.check}${modifier}`;
+    processCheck: async (actor, inputs, options = {}) => {
+      let modifier = "";
+      if (inputs.modifier != null && inputs.modifier !== 0) {
+        modifier = inputs.modifier > 0 ? `+${inputs.modifier}` : `${inputs.modifier}`;
+      }
 
-    const result = await GURPS.performAction(
-      GURPS.parselink(otf).action,
-      options.fastForward ? null : actor,
-      options.event,
-    );
+      const target = actor.system.attributes?.[inputs.check]?.value;
+      const otf = options.fastForward
+        ? `${inputs.check}${Number.isNumeric(target) ? target : ""}${modifier}`
+        : `${inputs.check}${modifier}`;
 
-    const last = GURPS.lastTargetedRoll;
-    if (!last || (result === undefined && !options.fastForward)) {
-      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-    }
+      const result = await GURPS.performAction(
+        GURPS.parselink(otf).action,
+        options.fastForward ? null : actor,
+        options.event,
+      );
 
-    const success = !last.failure;
-    const levelOfSuccess = last.isCritSuccess
-      ? 100
-      : last.isCritFailure
-        ? 0
-        : Math.clamp(50 + (last.margin ?? 0), 0, 100);
+      const last = GURPS.lastTargetedRoll;
+      if (!last || (result === undefined && !options.fastForward)) {
+        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      }
 
-    return {
-      canceled: false,
-      result: last.rtotal ?? null,
-      target: last.finaltarget ?? null,
-      success,
-      levelOfSuccess,
-      criticalSuccess: last.isCritSuccess === true,
-      criticalFailure: last.isCritFailure === true,
-    };
-  },
+      const success = !last.failure;
+      const levelOfSuccess = last.isCritSuccess
+        ? 100
+        : last.isCritFailure
+          ? 0
+          : Math.clamp(50 + (last.margin ?? 0), 0, 100);
+
+      return {
+        canceled: false,
+        result: last.rtotal ?? null,
+        target: last.finaltarget ?? null,
+        success,
+        levelOfSuccess,
+        criticalSuccess: last.isCritSuccess === true,
+        criticalFailure: last.isCritFailure === true,
+      };
+    },
+    },
+  };
 };

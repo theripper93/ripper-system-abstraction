@@ -1,71 +1,75 @@
-export const dataPaths = {
-  actor: {
-    type: "",
-    subtype: "",
-    size: "",
-    level: "",
-    role: "",
-  },
-
-  health: {
-    current: "",
-    maximum: "",
-    temporary: "",
-    minimum: "",
-
-    useWounds: true,
-    wounds: "wounds.value",
-    maximumWounds: "wounds.max",
-  },
-
-  item: {
-    quantity: "quantity",
-    weight: "encumbrance",
-
-    equipped: "state",
-    equippedValue: "equipped",
-    unequippedValue: "carried",
-    attuned: "",
-
-    uses: "",
-    maximumUses: "",
-  },
-
-  currency: {
-    base: "credits",
-
+export default async function genesys() {
+  return {
+    dataPaths: {
     actor: {
-      denominations: {
-        credits: "currency",
-      },
+      type: "",
+      subtype: "",
+      size: "",
+      level: "",
+      role: "",
+    },
+
+    health: {
+      current: "",
+      maximum: "",
+      temporary: "",
+      minimum: "",
+
+      useWounds: true,
+      wounds: "wounds.value",
+      maximumWounds: "wounds.max",
     },
 
     item: {
-      single: {
-        value: "price",
-        denomination: "credits",
+      quantity: "quantity",
+      weight: "encumbrance",
+
+      equipped: "state",
+      equippedValue: "equipped",
+      unequippedValue: "carried",
+      attuned: "",
+
+      uses: "",
+      maximumUses: "",
+    },
+
+    currency: {
+      base: "credits",
+
+      actor: {
+        denominations: {
+          credits: "currency",
+        },
       },
 
-      denominations: {},
+      item: {
+        single: {
+          value: "price",
+          denomination: "credits",
+        },
+
+        denominations: {},
+      },
+
+      denominations: {
+        credits: { value: 1 },
+      },
     },
 
-    denominations: {
-      credits: { value: 1 },
+    experience: {
+      current: "availableXP",
+      maximum: "",
+      level: "",
     },
-  },
 
-  experience: {
-    current: "availableXP",
-    maximum: "",
-    level: "",
-  },
-
-  features: {
-    supportsHealth: true,
-    supportsTemporaryHealth: false,
-    supportsWounds: true,
-    supportsCurrency: true,
-    supportsWeight: true,
-    supportsEquipment: true,
-  },
+    features: {
+      supportsHealth: true,
+      supportsTemporaryHealth: false,
+      supportsWounds: true,
+      supportsCurrency: true,
+      supportsWeight: true,
+      supportsEquipment: true,
+    },
+    },
+  };
 };

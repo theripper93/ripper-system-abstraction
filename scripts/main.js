@@ -4,6 +4,8 @@ import { registerSettings } from "./settings.js";
 import "./testsInterfaceCustomElement.js";
 import { buildInputs, parse, processCheck } from "./testsInterfaceCustomElement.js";
 import { api } from "./api/index.js";
+import { runAPITests } from "./testAPI.js";
+import { loadSystem } from "./systems/_index.js";
 
 export const MODULE_ID = "ripper-system-abstraction";
 
@@ -22,29 +24,31 @@ Hooks.on("init", () => {
     module.API = API;
 });
 
-Hooks.on("ready", () => {
+Hooks.on("ready", async () => {
     showWelcome();
     initConfig();
+    await loadSystem();
     openTestsDebugDialog();
 });
 
 async function openTestsDebugDialog() {
     const content = document.createElement("div");
+    const i18n = (key) => game.i18n.localize(key);
     content.innerHTML = `
         <div class="ripper-tests-debug standard-form">
             <div class="form-group">
-                <label>Actor</label>
+                <label>${i18n("ripper-system-abstraction.tests.Actor")}</label>
                 <select id="ripper-tests-actor"></select>
             </div>
             <div class="form-group">
-                <label>Fast Forward</label>
+                <label>${i18n("ripper-system-abstraction.tests.FastForward")}</label>
                 <input type="checkbox" id="ripper-tests-fastforward">
             </div>
             <tests-interface id="ripper-tests-element"></tests-interface>
-            <label>Serialized value</label>
+            <label>${i18n("ripper-system-abstraction.tests.SerializedValue")}</label>
             <div class="ripper-tests-result" id="ripper-tests-value"></div>
-            <label>Result</label>
-            <div class="ripper-tests-result" id="ripper-tests-result">Ready</div>
+            <label>${i18n("ripper-system-abstraction.tests.Result")}</label>
+            <div class="ripper-tests-result" id="ripper-tests-result">${i18n("ripper-system-abstraction.tests.Result")}</div>
         </div>`;
 
     const dialog = new foundry.applications.api.DialogV2({
@@ -52,10 +56,16 @@ async function openTestsDebugDialog() {
         buttons: [
             {
                 action: "run",
-                label: "Run Check",
+                label: "ripper-system-abstraction.tests.RunCheck",
                 icon: "fa-solid fa-dice-d20",
                 default: true,
                 callback: (event, button, dlg) => runCheck(dlg),
+            },
+            {
+                action: "test",
+                label: "ripper-system-abstraction.tests.RunAPITests",
+                icon: "fa-solid fa-vial",
+                callback: (event, button, dlg) => runAPITests(),
             },
         ],
     });

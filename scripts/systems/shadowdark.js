@@ -1,163 +1,167 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
-export const dataPaths = {
-  actor: {
-    type: "",
-    subtype: "",
-    size: "",
-    level: "level.value",
-    role: "",
-  },
+export default async function shadowdark() {
 
-  health: {
-    current: "attributes.hp.value",
-    maximum: "attributes.hp.max",
-    temporary: "",
-    minimum: "",
+  class ShadowdarkCheckInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.StringField({
+          label: "ripper-system-abstraction.tests.Check",
+          required: true,
+          choices,
+        }),
+      };
+    }
+  }
 
-    useWounds: false,
-    wounds: "",
-    maximumWounds: "",
-  },
+  class ShadowdarkDCInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.NumberField({
+          label: "ripper-system-abstraction.tests.DC",
+          required: false,
+          nullable: true,
+          integer: true,
+          min: 0,
+        }),
+      };
+    }
+  }
 
-  item: {
-    quantity: "quantity",
-    weight: "slots.slots_used",
+  function normalizeRoll(roll, dc) {
+    if (!roll) {
+      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
 
-    equipped: "equipped",
-    attuned: "",
+    const target = Number.isNumeric(roll.options?.dc) ? Number(roll.options.dc) : Number.isNumeric(dc) ? dc : null;
+    const success = target != null ? roll.total >= target : null;
 
-    uses: "uses.available",
-    maximumUses: "uses.max",
-  },
+    return {
+      canceled: false,
+      result: roll.total,
+      target,
+      success,
+      levelOfSuccess: success == null ? null : success ? 100 : 0,
+      criticalSuccess: roll.criticalSuccess === true,
+      criticalFailure: roll.criticalFailure === true,
+    };
+  }
 
-  currency: {
-    base: "gp",
-
+  return {
+    dataPaths: {
     actor: {
-      denominations: {
-        gp: "coins.gp",
-        sp: "coins.sp",
-        cp: "coins.cp",
-      },
+      type: "",
+      subtype: "",
+      size: "",
+      level: "level.value",
+      role: "",
+    },
+
+    health: {
+      current: "attributes.hp.value",
+      maximum: "attributes.hp.max",
+      temporary: "",
+      minimum: "",
+
+      useWounds: false,
+      wounds: "",
+      maximumWounds: "",
     },
 
     item: {
-      single: {
-        value: "",
-        denomination: "",
+      quantity: "quantity",
+      weight: "slots.slots_used",
+
+      equipped: "equipped",
+      attuned: "",
+
+      uses: "uses.available",
+      maximumUses: "uses.max",
+    },
+
+    currency: {
+      base: "gp",
+
+      actor: {
+        denominations: {
+          gp: "coins.gp",
+          sp: "coins.sp",
+          cp: "coins.cp",
+        },
+      },
+
+      item: {
+        single: {
+          value: "",
+          denomination: "",
+        },
+
+        denominations: {
+          gp: "cost.gp",
+          sp: "cost.sp",
+          cp: "cost.cp",
+        },
       },
 
       denominations: {
-        gp: "cost.gp",
-        sp: "cost.sp",
-        cp: "cost.cp",
+        cp: { value: 0.01 },
+        sp: { value: 0.1 },
+        gp: { value: 1 },
       },
     },
 
-    denominations: {
-      cp: { value: 0.01 },
-      sp: { value: 0.1 },
-      gp: { value: 1 },
+    experience: {
+      current: "level.xp",
+      maximum: "",
+      level: "level.value",
     },
-  },
 
-  experience: {
-    current: "level.xp",
-    maximum: "",
-    level: "level.value",
-  },
+    features: {
+      supportsHealth: true,
+      supportsTemporaryHealth: false,
+      supportsWounds: false,
+      supportsCurrency: true,
+      supportsWeight: true,
+      supportsEquipment: true,
+    },
+    },
+    testsInterface: {
+    buildInputs: () => {
+      const choices = {};
 
-  features: {
-    supportsHealth: true,
-    supportsTemporaryHealth: false,
-    supportsWounds: false,
-    supportsCurrency: true,
-    supportsWeight: true,
-    supportsEquipment: true,
-  },
-};
-
-class ShadowdarkCheckInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.StringField({
-        label: "Check",
-        required: true,
-        choices,
-      }),
-    };
-  }
-}
-
-class ShadowdarkDCInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.NumberField({
-        label: "DC",
-        required: false,
-        nullable: true,
-        integer: true,
-        min: 0,
-      }),
-    };
-  }
-}
-
-function normalizeRoll(roll, dc) {
-  if (!roll) {
-    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-  }
-
-  const target = Number.isNumeric(roll.options?.dc) ? Number(roll.options.dc) : Number.isNumeric(dc) ? dc : null;
-  const success = target != null ? roll.total >= target : null;
-
-  return {
-    canceled: false,
-    result: roll.total,
-    target,
-    success,
-    levelOfSuccess: success == null ? null : success ? 100 : 0,
-    criticalSuccess: roll.criticalSuccess === true,
-    criticalFailure: roll.criticalFailure === true,
-  };
-}
-
-export const testsInterface = {
-  buildInputs: () => {
-    const choices = {};
-
-    for (const key of CONFIG.SHADOWDARK.ABILITY_KEYS) {
-      choices[key] = game.i18n.localize(CONFIG.SHADOWDARK.ABILITIES_LONG[key]);
-    }
-
-    class CheckInput extends ShadowdarkCheckInput {
-      static defineSchema() {
-        return {
-          value: new fields.StringField({
-            label: "Check",
-            required: true,
-            choices,
-          }),
-        };
+      for (const key of CONFIG.SHADOWDARK.ABILITY_KEYS) {
+        choices[key] = game.i18n.localize(CONFIG.SHADOWDARK.ABILITIES_LONG[key]);
       }
-    }
 
-    return {
-      check: CheckInput,
-      dc: ShadowdarkDCInput,
-    };
-  },
+      class CheckInput extends ShadowdarkCheckInput {
+        static defineSchema() {
+          return {
+            value: new fields.StringField({
+              label: "ripper-system-abstraction.tests.Check",
+              required: true,
+              choices,
+            }),
+          };
+        }
+      }
 
-  processCheck: async (actor, inputs, options = {}) => {
-    const config = {
-      skipPrompt: options.fastForward ?? false,
-      event: options.event,
-    };
-    if (inputs.dc != null) config.mainRoll = { dc: inputs.dc };
+      return {
+        check: CheckInput,
+        dc: ShadowdarkDCInput,
+      };
+    },
 
-    const roll = await actor.system.rollStatCheck(inputs.check, config);
-    return normalizeRoll(roll, inputs.dc);
-  },
+    processCheck: async (actor, inputs, options = {}) => {
+      const config = {
+        skipPrompt: options.fastForward ?? false,
+        event: options.event,
+      };
+      if (inputs.dc != null) config.mainRoll = { dc: inputs.dc };
+
+      const roll = await actor.system.rollStatCheck(inputs.check, config);
+      return normalizeRoll(roll, inputs.dc);
+    },
+    },
+  };
 };

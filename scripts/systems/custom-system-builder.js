@@ -1,65 +1,69 @@
-export const dataPaths = {
-  actor: {
-    type: "",
-    subtype: "",
-    size: "",
-    level: "",
-    role: "",
-  },
-
-  health: {
-    current: "",
-    maximum: "",
-    temporary: "",
-    minimum: "",
-
-    useWounds: false,
-    wounds: "",
-    maximumWounds: "",
-  },
-
-  item: {
-    quantity: "",
-    weight: "",
-
-    equipped: "",
-    attuned: "",
-
-    uses: "",
-    maximumUses: "",
-  },
-
-  currency: {
-    base: "",
-
+export default async function customSystemBuilder() {
+  return {
+    dataPaths: {
     actor: {
-      denominations: {},
+      type: "",
+      subtype: "",
+      size: "",
+      level: "",
+      role: "",
+    },
+
+    health: {
+      current: "",
+      maximum: "",
+      temporary: "",
+      minimum: "",
+
+      useWounds: false,
+      wounds: "",
+      maximumWounds: "",
     },
 
     item: {
-      single: {
-        value: "",
-        denomination: "",
+      quantity: "",
+      weight: "",
+
+      equipped: "",
+      attuned: "",
+
+      uses: "",
+      maximumUses: "",
+    },
+
+    currency: {
+      base: "",
+
+      actor: {
+        denominations: {},
+      },
+
+      item: {
+        single: {
+          value: "",
+          denomination: "",
+        },
+
+        denominations: {},
       },
 
       denominations: {},
     },
 
-    denominations: {},
-  },
+    experience: {
+      current: "",
+      maximum: "",
+      level: "",
+    },
 
-  experience: {
-    current: "",
-    maximum: "",
-    level: "",
-  },
-
-  features: {
-    supportsHealth: false,
-    supportsTemporaryHealth: false,
-    supportsWounds: false,
-    supportsCurrency: false,
-    supportsWeight: false,
-    supportsEquipment: false,
-  },
+    features: {
+      supportsHealth: false,
+      supportsTemporaryHealth: false,
+      supportsWounds: false,
+      supportsCurrency: false,
+      supportsWeight: false,
+      supportsEquipment: false,
+    },
+    },
+  };
 };

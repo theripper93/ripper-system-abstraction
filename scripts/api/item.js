@@ -10,6 +10,10 @@ function itemConfig(dp) {
   return dp.item ?? {};
 }
 
+function numeric(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 /**
  * Interpret the equipped state of an item. Boolean paths need no metadata;
  * numeric and string enum paths use the optional `equippedValue` /
@@ -161,8 +165,15 @@ export const item = {
    * @returns {number|null}
    */
   getUses(item) {
-    const spec = itemConfig(resolveDataPaths(item)).uses;
-    return spec ? (getPath(item, spec) ?? null) : null;
+    const dp = resolveDataPaths(item);
+    const cfg = itemConfig(dp);
+    if (cfg.usesSpent) {
+      const maximum = numeric(cfg.maximumUses ? getPath(item, cfg.maximumUses) : null);
+      const spent = numeric(getPath(item, cfg.usesSpent)) ?? 0;
+      return maximum != null ? maximum - spent : null;
+    }
+    const spec = cfg.uses;
+    return spec ? numeric(getPath(item, spec)) : null;
   },
 
   /**
@@ -173,7 +184,7 @@ export const item = {
    */
   getMaximumUses(item) {
     const spec = itemConfig(resolveDataPaths(item)).maximumUses;
-    return spec ? (getPath(item, spec) ?? null) : null;
+    return spec ? numeric(getPath(item, spec)) : null;
   },
 
   /**
@@ -184,7 +195,14 @@ export const item = {
    * @returns {Promise<Item|Object<string,*>>}
    */
   setUses(item, value, options = {}) {
-    const spec = itemConfig(resolveDataPaths(item)).uses;
+    const dp = resolveDataPaths(item);
+    const cfg = itemConfig(dp);
+    if (cfg.usesSpent) {
+      const maximum = numeric(cfg.maximumUses ? getPath(item, cfg.maximumUses) : null);
+      const spent = maximum != null ? Math.max(0, Math.min(maximum, maximum - value)) : value;
+      return executeUpdate(item, setPath(item, cfg.usesSpent, spent), options);
+    }
+    const spec = cfg.uses;
     if (!spec) throw unsupported(item, "item.setUses", "no uses path");
     return executeUpdate(item, setPath(item, spec, value), options);
   },
@@ -199,9 +217,17 @@ export const item = {
    * @returns {Promise<Item|Object<string,*>>}
    */
   consumeUses(item, amount, options = {}) {
-    const spec = itemConfig(resolveDataPaths(item)).uses;
+    const dp = resolveDataPaths(item);
+    const cfg = itemConfig(dp);
+    if (cfg.usesSpent) {
+      const maximum = numeric(cfg.maximumUses ? getPath(item, cfg.maximumUses) : null);
+      const spent = numeric(getPath(item, cfg.usesSpent)) ?? 0;
+      const next = maximum != null ? Math.min(maximum, spent + amount) : spent + amount;
+      return executeUpdate(item, setPath(item, cfg.usesSpent, next), options);
+    }
+    const spec = cfg.uses;
     if (!spec) throw unsupported(item, "item.consumeUses", "no uses path");
-    const current = getPath(item, spec) ?? 0;
+    const current = numeric(getPath(item, spec)) ?? 0;
     return executeUpdate(item, setPath(item, spec, Math.max(0, current - amount)), options);
   },
 
@@ -215,8 +241,12 @@ export const item = {
    */
   restoreUses(item, options = {}) {
     const dp = resolveDataPaths(item);
-    const usesSpec = itemConfig(dp).uses;
-    const maximumSpec = itemConfig(dp).maximumUses;
+    const cfg = itemConfig(dp);
+    if (cfg.usesSpent) {
+      return executeUpdate(item, setPath(item, cfg.usesSpent, 0), options);
+    }
+    const usesSpec = cfg.uses;
+    const maximumSpec = cfg.maximumUses;
     if (!usesSpec || !maximumSpec) {
       throw unsupported(item, "item.restoreUses", "requires uses and maximumUses paths");
     }

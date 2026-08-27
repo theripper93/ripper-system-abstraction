@@ -2,6 +2,27 @@
     "ripper-system-abstraction": {
         "settings": {},
         "app": {},
-        "flags": {}
+        "flags": {},
+        "tests": {
+            "Check": "Check",
+            "DC": "DC",
+            "Difficulty": "Difficulty",
+            "Modifier": "Modifier",
+            "ChallengeLevel": "Challenge Level",
+            "Formula": "Formula",
+            "AbilityCheck": "Ability Check",
+            "SavingThrow": "Saving Throw",
+            "Skill": "Skill",
+            "Tool": "Tool",
+            "Attribute": "Attribute",
+            "Characteristic": "Characteristic",
+            "Stat": "Stat",
+            "Actor": "Actor",
+            "FastForward": "Fast Forward",
+            "SerializedValue": "Serialized value",
+            "Result": "Result",
+            "RunCheck": "Run Check",
+            "RunAPITests": "Run API Tests"
+        }
     }
 }

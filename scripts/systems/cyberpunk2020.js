@@ -1,204 +1,219 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
-export const dataPaths = {
-  actor: {
-    type: "",
-    subtype: "",
-    size: "",
-    level: "",
-    role: "role.value",
-  },
+export default async function cyberpunk2020() {
+  for (const packId of ["cyberpunk2020.default-skills-en", "cyberpunk2020.role-skills-en", "cyberpunk2020.default-skills-ru", "cyberpunk2020.role-skills-ru"]) {
+    try {
+      const pack = game.packs?.get?.(packId);
+      if (pack && !pack.indexed) await pack.getIndex();
+    } catch (err) {}
+  }
 
-  health: {
-    current: "",
-    maximum: "",
-    temporary: "",
-    minimum: "",
 
-    useWounds: true,
-    wounds: "damage",
-    maximumWounds: "",
-  },
+  class Cyberpunk2020CheckInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.StringField({
+          label: "ripper-system-abstraction.tests.Check",
+          required: true,
+          choices,
+        }),
+      };
+    }
+  }
 
-  item: {
-    quantity: "",
-    weight: "weight",
+  class Cyberpunk2020ModifierInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.NumberField({
+          label: "ripper-system-abstraction.tests.Modifier",
+          required: false,
+          nullable: true,
+          integer: true,
+        }),
+      };
+    }
+  }
 
-    equipped: "equipped",
-    attuned: "",
+  const CYBERPUNK_STATS = ["int", "ref", "tech", "cool", "attr", "luck", "ma", "bt", "emp"];
 
-    uses: "shotsLeft",
-    maximumUses: "shots",
-  },
-
-  currency: {
-    base: "eurobucks",
-
+  return {
+    dataPaths: {
     actor: {
-      denominations: {
-        eurobucks: "eurobucks",
-      },
+      type: "",
+      subtype: "",
+      size: "",
+      level: "",
+      role: "role.value",
+    },
+
+    health: {
+      current: "",
+      maximum: "",
+      temporary: "",
+      minimum: "",
+
+      useWounds: true,
+      wounds: "damage",
+      maximumWounds: "",
     },
 
     item: {
-      single: {
-        value: "cost",
-        denomination: "eurobucks",
+      quantity: "",
+      weight: "weight",
+
+      equipped: "equipped",
+      attuned: "",
+
+      uses: "shotsLeft",
+      maximumUses: "shots",
+    },
+
+    currency: {
+      base: "eurobucks",
+
+      actor: {
+        denominations: {
+          eurobucks: "eurobucks",
+        },
       },
 
-      denominations: {},
+      item: {
+        single: {
+          value: "cost",
+          denomination: "eurobucks",
+        },
+
+        denominations: {},
+      },
+
+      denominations: {
+        eurobucks: { value: 1 },
+      },
     },
 
-    denominations: {
-      eurobucks: { value: 1 },
+    experience: {
+      current: "ip",
+      maximum: "",
+      level: "",
     },
-  },
 
-  experience: {
-    current: "ip",
-    maximum: "",
-    level: "",
-  },
+    features: {
+      supportsHealth: false,
+      supportsTemporaryHealth: false,
+      supportsWounds: true,
+      supportsCurrency: true,
+      supportsWeight: true,
+      supportsEquipment: true,
+    },
+    },
+    testsInterface: {
+    buildInputs: () => {
+      const choices = {};
+      const group = {
+        stat: game.i18n.localize("ripper-system-abstraction.tests.Stat"),
+        skill: game.i18n.localize("ripper-system-abstraction.tests.Skill"),
+      };
 
-  features: {
-    supportsHealth: false,
-    supportsTemporaryHealth: false,
-    supportsWounds: true,
-    supportsCurrency: true,
-    supportsWeight: true,
-    supportsEquipment: true,
-  },
-};
-
-class Cyberpunk2020CheckInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.StringField({
-        label: "Check",
-        required: true,
-        choices,
-      }),
-    };
-  }
-}
-
-class Cyberpunk2020ModifierInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.NumberField({
-        label: "Modifier",
-        required: false,
-        nullable: true,
-        integer: true,
-      }),
-    };
-  }
-}
-
-const CYBERPUNK_STATS = ["int", "ref", "tech", "cool", "attr", "luck", "ma", "bt", "emp"];
-
-export const testsInterface = {
-  buildInputs: () => {
-    const choices = {};
-
-    for (const key of CYBERPUNK_STATS) {
-      choices[`stat.${key}`] = game.i18n.localize(`CYBERPUNK.${key.capitalize()}Full`);
-    }
-
-    for (const packId of ["cyberpunk2020.default-skills-en", "cyberpunk2020.role-skills-en", "cyberpunk2020.default-skills-ru", "cyberpunk2020.role-skills-ru"]) {
-      const pack = game.packs.get(packId);
-      if (!pack?.indexed) continue;
-      const index = pack.index instanceof Map ? pack.index.values() : pack.index;
-      for (const entry of index) {
-        if (entry.type === "skill") choices[`skill.${entry.name}`] = entry.name;
+      for (const key of CYBERPUNK_STATS) {
+        choices[`stat.${key}`] = { label: game.i18n.localize(`CYBERPUNK.${key.capitalize()}Full`), group: group.stat };
       }
-    }
 
-    class CheckInput extends Cyberpunk2020CheckInput {
-      static defineSchema() {
+      for (const packId of ["cyberpunk2020.default-skills-en", "cyberpunk2020.role-skills-en", "cyberpunk2020.default-skills-ru", "cyberpunk2020.role-skills-ru"]) {
+        const pack = game.packs.get(packId);
+        if (!pack?.indexed) continue;
+        const index = pack.index instanceof Map ? pack.index.values() : pack.index;
+        for (const entry of index) {
+          if (entry.type === "skill") choices[`skill.${entry.name}`] = { label: entry.name, group: group.skill };
+        }
+      }
+
+      class CheckInput extends Cyberpunk2020CheckInput {
+        static defineSchema() {
+          return {
+            value: new fields.StringField({
+              label: "ripper-system-abstraction.tests.Check",
+              required: true,
+              choices,
+            }),
+          };
+        }
+      }
+
+      return {
+        check: CheckInput,
+        modifier: Cyberpunk2020ModifierInput,
+      };
+    },
+
+    processCheck: async (actor, inputs, options = {}) => {
+      const [type, key] = inputs.check.split(":");
+
+      if (type === "stat") {
+        const roll = await new Promise((resolve) => {
+          const hook = (message) => {
+            Hooks.off("createChatMessage", hook);
+            resolve(message.rolls?.[0] ?? null);
+          };
+          Hooks.once("createChatMessage", hook);
+          actor.rollStat(key);
+          setTimeout(() => {
+            Hooks.off("createChatMessage", hook);
+            resolve(null);
+          }, 1000);
+        });
+
+        if (!roll) {
+          return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+        }
+
         return {
-          value: new fields.StringField({
-            label: "Check",
-            required: true,
-            choices,
-          }),
+          canceled: false,
+          result: roll.total,
+          target: null,
+          success: null,
+          levelOfSuccess: null,
+          criticalSuccess: roll.isCrit === true,
+          criticalFailure: roll.isFumble === true,
         };
       }
-    }
 
-    return {
-      check: CheckInput,
-      modifier: Cyberpunk2020ModifierInput,
-    };
-  },
+      if (type === "skill") {
+        const item = actor.items.find((i) => i.type === "skill" && i.name === key);
+        if (!item) {
+          return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+        }
 
-  processCheck: async (actor, inputs, options = {}) => {
-    const [type, key] = inputs.check.split(":");
+        const roll = await new Promise((resolve) => {
+          const hook = (message) => {
+            Hooks.off("createChatMessage", hook);
+            resolve(message.rolls?.[0] ?? null);
+          };
+          Hooks.once("createChatMessage", hook);
+          actor.rollSkill(item.id, inputs.modifier ?? 0);
+          setTimeout(() => {
+            Hooks.off("createChatMessage", hook);
+            resolve(null);
+          }, 1000);
+        });
 
-    if (type === "stat") {
-      const roll = await new Promise((resolve) => {
-        const hook = (message) => {
-          Hooks.off("createChatMessage", hook);
-          resolve(message.rolls?.[0] ?? null);
+        if (!roll) {
+          return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+        }
+
+        return {
+          canceled: false,
+          result: roll.total,
+          target: null,
+          success: null,
+          levelOfSuccess: null,
+          criticalSuccess: roll.isCrit === true,
+          criticalFailure: roll.isFumble === true,
         };
-        Hooks.once("createChatMessage", hook);
-        actor.rollStat(key);
-        setTimeout(() => {
-          Hooks.off("createChatMessage", hook);
-          resolve(null);
-        }, 1000);
-      });
-
-      if (!roll) {
-        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
       }
 
-      return {
-        canceled: false,
-        result: roll.total,
-        target: null,
-        success: null,
-        levelOfSuccess: null,
-        criticalSuccess: roll.isCrit === true,
-        criticalFailure: roll.isFumble === true,
-      };
-    }
-
-    if (type === "skill") {
-      const item = actor.items.find((i) => i.type === "skill" && i.name === key);
-      if (!item) {
-        return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-      }
-
-      const roll = await new Promise((resolve) => {
-        const hook = (message) => {
-          Hooks.off("createChatMessage", hook);
-          resolve(message.rolls?.[0] ?? null);
-        };
-        Hooks.once("createChatMessage", hook);
-        actor.rollSkill(item.id, inputs.modifier ?? 0);
-        setTimeout(() => {
-          Hooks.off("createChatMessage", hook);
-          resolve(null);
-        }, 1000);
-      });
-
-      if (!roll) {
-        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-      }
-
-      return {
-        canceled: false,
-        result: roll.total,
-        target: null,
-        success: null,
-        levelOfSuccess: null,
-        criticalSuccess: roll.isCrit === true,
-        criticalFailure: roll.isFumble === true,
-      };
-    }
-
-    throw new Error(`Unsupported Cyberpunk 2020 check type: ${type}`);
-  },
+      throw new Error(`Unsupported Cyberpunk 2020 check type: ${type}`);
+    },
+    },
+  };
 };

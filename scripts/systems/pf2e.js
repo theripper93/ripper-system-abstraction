@@ -1,184 +1,188 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
-export const dataPaths = {
-  actor: {
-    type: "traits.value",
-    subtype: "",
-    size: "traits.size.value",
-    level: "details.level.value",
-    role: "",
-  },
+export default async function pf2e() {
 
-  health: {
-    current: "attributes.hp.value",
-    maximum: "attributes.hp.max",
-    temporary: "attributes.hp.temp",
-    minimum: "",
+  class PF2ECheckInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.StringField({
+          label: "ripper-system-abstraction.tests.Check",
+          required: true,
+          choices,
+        }),
+      };
+    }
+  }
 
-    useWounds: false,
-    wounds: "",
-    maximumWounds: "",
-  },
+  class PF2EDCInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.NumberField({
+          label: "ripper-system-abstraction.tests.DC",
+          required: false,
+          nullable: true,
+          integer: true,
+          min: 0,
+        }),
+      };
+    }
+  }
 
-  item: {
-    quantity: "quantity",
-    weight: "bulk.value",
+  const DEGREE_TO_LEVEL = [0, 33, 66, 100];
 
-    equipped: "equipped.carryType",
-    attuned: "equipped.invested",
+  function normalizeRoll(roll, dc) {
+    if (!roll) {
+      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
 
-    uses: "uses.value",
-    maximumUses: "uses.max",
-  },
+    const degree = roll.degreeOfSuccess;
+    const target = Number.isNumeric(dc) ? dc : null;
 
-  currency: {
-    base: "cp",
+    return {
+      canceled: false,
+      result: roll.total,
+      target,
+      success: degree != null ? degree >= 2 : null,
+      levelOfSuccess: degree != null ? DEGREE_TO_LEVEL[degree] : null,
+      criticalSuccess: degree === 3,
+      criticalFailure: degree === 0,
+    };
+  }
 
+  return {
+    dataPaths: {
     actor: {
-      denominations: {},
+      type: "traits.value",
+      subtype: "",
+      size: "traits.size.value",
+      level: "details.level.value",
+      role: "",
+    },
+
+    health: {
+      current: "attributes.hp.value",
+      maximum: "attributes.hp.max",
+      temporary: "attributes.hp.temp",
+      minimum: "",
+
+      useWounds: false,
+      wounds: "",
+      maximumWounds: "",
     },
 
     item: {
-      single: {
-        value: "",
-        denomination: "",
+      quantity: "quantity",
+      weight: "bulk.value",
+
+      equipped: "equipped.carryType",
+      attuned: "equipped.invested",
+
+      uses: "uses.value",
+      maximumUses: "uses.max",
+    },
+
+    currency: {
+      base: "cp",
+
+      actor: {
+        denominations: {},
+      },
+
+      item: {
+        single: {
+          value: "",
+          denomination: "",
+        },
+
+        denominations: {
+          cp: "price.value.cp",
+          sp: "price.value.sp",
+          gp: "price.value.gp",
+          pp: "price.value.pp",
+        },
       },
 
       denominations: {
-        cp: "price.value.cp",
-        sp: "price.value.sp",
-        gp: "price.value.gp",
-        pp: "price.value.pp",
+        cp: { value: 1 },
+        sp: { value: 10 },
+        gp: { value: 100 },
+        pp: { value: 1000 },
       },
     },
 
-    denominations: {
-      cp: { value: 1 },
-      sp: { value: 10 },
-      gp: { value: 100 },
-      pp: { value: 1000 },
+    experience: {
+      current: "details.xp.value",
+      maximum: "details.xp.max",
+      level: "details.level.value",
     },
-  },
 
-  experience: {
-    current: "details.xp.value",
-    maximum: "details.xp.max",
-    level: "details.level.value",
-  },
+    features: {
+      supportsHealth: true,
+      supportsTemporaryHealth: true,
+      supportsWounds: false,
+      supportsCurrency: true,
+      supportsWeight: true,
+      supportsEquipment: true,
+    },
+    },
+    testsInterface: {
+    buildInputs: () => {
+      const choices = {};
 
-  features: {
-    supportsHealth: true,
-    supportsTemporaryHealth: true,
-    supportsWounds: false,
-    supportsCurrency: true,
-    supportsWeight: true,
-    supportsEquipment: true,
-  },
-};
-
-class PF2ECheckInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.StringField({
-        label: "Check",
-        required: true,
-        choices,
-      }),
-    };
-  }
-}
-
-class PF2EDCInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.NumberField({
-        label: "DC",
-        required: false,
-        nullable: true,
-        integer: true,
-        min: 0,
-      }),
-    };
-  }
-}
-
-const DEGREE_TO_LEVEL = [0, 33, 66, 100];
-
-function normalizeRoll(roll, dc) {
-  if (!roll) {
-    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-  }
-
-  const degree = roll.degreeOfSuccess;
-  const target = Number.isNumeric(dc) ? dc : null;
-
-  return {
-    canceled: false,
-    result: roll.total,
-    target,
-    success: degree != null ? degree >= 2 : null,
-    levelOfSuccess: degree != null ? DEGREE_TO_LEVEL[degree] : null,
-    criticalSuccess: degree === 3,
-    criticalFailure: degree === 0,
-  };
-}
-
-export const testsInterface = {
-  buildInputs: () => {
-    const choices = {};
-
-    for (const [slug, value] of Object.entries(CONFIG.PF2E.skills)) {
-      choices[`skill.${slug}`] = game.i18n.localize(value.label);
-    }
-
-    for (const save of ["fortitude", "reflex", "will"]) {
-      choices[`save.${save}`] = game.i18n.localize(`PF2E.Saves${save.capitalize()}`);
-    }
-
-    choices["perception"] = game.i18n.localize("PF2E.PerceptionCheck");
-
-    class CheckInput extends PF2ECheckInput {
-      static defineSchema() {
-        return {
-          value: new fields.StringField({
-            label: "Check",
-            required: true,
-            choices,
-          }),
-        };
+      for (const [slug, value] of Object.entries(CONFIG.PF2E.skills)) {
+        choices[`skill.${slug}`] = game.i18n.localize(value.label);
       }
-    }
 
-    return {
-      check: CheckInput,
-      dc: PF2EDCInput,
-    };
-  },
+      for (const save of ["fortitude", "reflex", "will"]) {
+        choices[`save.${save}`] = game.i18n.localize(`PF2E.Saves${save.capitalize()}`);
+      }
 
-  processCheck: async (actor, inputs, options = {}) => {
-    const [type, key] = inputs.check.split(".");
-    const rollOptions = {
-      skipDialog: options.fastForward ?? false,
-      event: options.event,
-    };
-    if (inputs.dc != null) rollOptions.dc = inputs.dc;
+      choices["perception"] = game.i18n.localize("PF2E.PerceptionCheck");
 
-    let roll;
-    switch (type) {
-      case "skill":
-      case "save":
-        roll = await actor.getStatistic(key)?.roll(rollOptions);
-        break;
+      class CheckInput extends PF2ECheckInput {
+        static defineSchema() {
+          return {
+            value: new fields.StringField({
+              label: "ripper-system-abstraction.tests.Check",
+              required: true,
+              choices,
+            }),
+          };
+        }
+      }
 
-      case "perception":
-        roll = await actor.perception?.roll(rollOptions);
-        break;
+      return {
+        check: CheckInput,
+        dc: PF2EDCInput,
+      };
+    },
 
-      default:
-        throw new Error(`Unsupported PF2E check type: ${type}`);
-    }
+    processCheck: async (actor, inputs, options = {}) => {
+      const [type, key] = inputs.check.split(".");
+      const rollOptions = {
+        skipDialog: options.fastForward ?? false,
+        event: options.event,
+      };
+      if (inputs.dc != null) rollOptions.dc = inputs.dc;
 
-    return normalizeRoll(roll, inputs.dc);
-  },
+      let roll;
+      switch (type) {
+        case "skill":
+        case "save":
+          roll = await actor.getStatistic(key)?.roll(rollOptions);
+          break;
+
+        case "perception":
+          roll = await actor.perception?.roll(rollOptions);
+          break;
+
+        default:
+          throw new Error(`Unsupported PF2E check type: ${type}`);
+      }
+
+      return normalizeRoll(roll, inputs.dc);
+    },
+    },
+  };
 };

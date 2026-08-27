@@ -1,26 +1,14 @@
-import { testsInterfaces, defaultTestsInterface } from "./systems/_index.js";
-
-/**
- * Resolve the tests interface for a system, falling back to the shared
- * default (a generic roll-formula + dc input) when the system provides none.
- *
- * @param {string} [systemId] The Foundry system ID. Defaults to game.system.id.
- * @returns {Object} The system's tests interface.
- */
-export function getTestsInterface(systemId = game.system.id) {
-  return testsInterfaces[systemId] ?? defaultTestsInterface;
-}
+import { getTestsInterface } from "./systems/_index.js";
 
 /**
  * Build the DataModel classes describing the inputs required to run a check
- * for the given game system. Choices are pulled from system configuration
+ * for the loaded game system. Choices are pulled from system configuration
  * only, never from a specific actor.
  *
- * @param {string} [systemId]      The Foundry system ID. Defaults to game.system.id.
  * @returns {Object<string, typeof foundry.abstract.DataModel>}
  */
-export function buildInputs(systemId = game.system.id) {
-  return getTestsInterface(systemId).buildInputs();
+export function buildInputs() {
+  return getTestsInterface().buildInputs();
 }
 
 /**
@@ -64,10 +52,9 @@ export function serialize(inputs) {
  * coercing values according to the input DataModels returned by buildInputs.
  *
  * @param {string} value            The serialized inputs string.
- * @param {string} [systemId]       The Foundry system ID. Defaults to game.system.id.
  * @returns {Object<string, any>}   The parsed and typed inputs object.
  */
-export function parse(value, systemId = game.system.id) {
+export function parse(value) {
   const raw = {};
   if (value) {
     for (const pair of String(value).split("|")) {
@@ -78,7 +65,7 @@ export function parse(value, systemId = game.system.id) {
     }
   }
 
-  const inputClasses = buildInputs(systemId);
+  const inputClasses = buildInputs();
   const inputs = {};
 
   for (const [key, model] of Object.entries(inputClasses ?? {})) {
@@ -110,14 +97,13 @@ export function parse(value, systemId = game.system.id) {
  * @param {Object} [options]        Options for the check.
  * @param {boolean} [options.fastForward]  Whether to skip the roll dialog if possible.
  * @param {Event} [options.event]    An optional originating event.
- * @param {string} [systemId]       The Foundry system ID. Defaults to game.system.id.
  * @returns {Promise<{canceled: boolean, result: number|null, target: number|null,
  *   success: boolean|null, levelOfSuccess: number|null, criticalSuccess: boolean,
  *   criticalFailure: boolean}>}    The standardized check result.
  */
-export async function processCheck(actor, value, options = {}, systemId = game.system.id) {
-  const inputs = parse(value, systemId);
-  return getTestsInterface(systemId).processCheck(actor, inputs, options);
+export async function processCheck(actor, value, options = {}) {
+  const inputs = parse(value);
+  return getTestsInterface().processCheck(actor, inputs, options);
 }
 
 /**
@@ -139,6 +125,7 @@ export class TestsInterfaceElement extends HTMLElement {
 
   constructor() {
     super();
+    this.classList.add("form-fields");
   }
 
   /** The collected inputs as a single "key=value|key=value" string. */
@@ -203,9 +190,6 @@ export class TestsInterfaceElement extends HTMLElement {
       return;
     }
 
-    const container = document.createElement("div");
-    container.classList.add("tests-interface");
-
     for (const [key, model] of Object.entries(inputClasses)) {
       const modelFields = model.schema?.fields ?? {};
       const names = Object.keys(modelFields);
@@ -217,12 +201,10 @@ export class TestsInterfaceElement extends HTMLElement {
         const control = group.querySelector("input, select, textarea");
         control?.addEventListener("input", () => this.#emit());
         control?.addEventListener("change", () => this.#emit());
-        container.append(group);
+        this.append(...group.children);
         this.#fields.push({ key, name, single, field, control });
       }
     }
-
-    this.append(container);
     this.#emit();
   }
 

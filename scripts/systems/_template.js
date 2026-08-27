@@ -103,6 +103,12 @@
  * uses:
  *   Current remaining uses/charges.
  *
+ * usesSpent (optional):
+ *   A path to a stored "spent" counter when the system stores uses as
+ *   consumed rather than remaining (e.g. `uses.spent` with a derived
+ *   remaining value). The API then computes remaining as `maximumUses -
+ *   usesSpent` and mutates the spent counter.
+ *
  * maximumUses:
  *   Maximum uses/charges.
  *
@@ -201,7 +207,15 @@
  *   Items can be equipped.
  */
 
-export const dataPaths = {
+export default async function systemAdapter() {
+  /*
+   * Optional asynchronous preloads (e.g. awaiting compendium `getIndex()` to
+   * resolve names for tool/skill choices) may run here, before the adapter's
+   * dataPaths and testsInterface are returned.
+   */
+
+  return {
+    dataPaths: {
   // -------------------------------------------------------------------------
   // Actor
   // -------------------------------------------------------------------------
@@ -311,7 +325,7 @@ export const dataPaths = {
     supportsWeight: false,
     supportsEquipment: false,
   },
-};
+    },
 
 // ---------------------------------------------------------------------------
 // Tests / Checks
@@ -377,7 +391,7 @@ export const dataPaths = {
 //   }
 //
 
-export const testsInterface = {
+    testsInterface: {
   /**
    * Returns the DataModel classes required to build a system check.
    *
@@ -412,4 +426,6 @@ export const testsInterface = {
   processCheck: async (actor, inputs, options = {}) => {
     throw new Error("processCheck is not implemented");
   },
+},
+  };
 };

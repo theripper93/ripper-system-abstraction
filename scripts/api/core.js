@@ -1,4 +1,4 @@
-import { systems } from "../systems/_index.js";
+import { getDataPaths } from "../systems/_index.js";
 
 /**
  * Resolve the dataPaths adapter for the world's current game system.
@@ -7,11 +7,10 @@ import { systems } from "../systems/_index.js";
  * @returns {Object} The system's dataPaths configuration.
  */
 export function resolveDataPaths(document) {
-  const systemId = game.system.id;
-  const dataPaths = systems[systemId];
+  const dataPaths = getDataPaths();
   if (!dataPaths) {
     throw new Error(
-      `[Ripper System Abstraction] No system adapter exists for "${systemId}".`,
+      `[Ripper System Abstraction] No system adapter is loaded for "${game.system.id}".`,
     );
   }
   return dataPaths;

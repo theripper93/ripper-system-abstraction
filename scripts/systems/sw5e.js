@@ -1,195 +1,205 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
-export const dataPaths = {
-  actor: {
-    type: "details.type.value",
-    subtype: "details.type.subtype",
-    size: "traits.size",
-    level: "details.level",
-    role: "",
-  },
+export default async function sw5e() {
 
-  health: {
-    current: "attributes.hp.value",
-    maximum: "attributes.hp.max",
-    temporary: "attributes.hp.temp",
-    minimum: "",
+  class SW5ECheckInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.StringField({
+          label: "ripper-system-abstraction.tests.Check",
+          required: true,
+          choices,
+        }),
+      };
+    }
+  }
 
-    useWounds: false,
-    wounds: "",
-    maximumWounds: "",
-  },
+  class SW5EDCInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.NumberField({
+          label: "ripper-system-abstraction.tests.DC",
+          required: false,
+          nullable: true,
+          integer: true,
+          min: 0,
+        }),
+      };
+    }
+  }
 
-  item: {
-    quantity: "quantity",
-    weight: "weight",
+  function normalizeRoll(roll, dc) {
+    if (!roll) {
+      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
 
-    equipped: "equipped",
-    attuned: "attunement",
+    const target = Number.isNumeric(roll.options?.targetValue) ? roll.options.targetValue : Number.isNumeric(dc) ? dc : null;
+    const criticalSuccess = roll.isCritical === true;
+    const criticalFailure = roll.isFumble === true;
+    const success = target != null ? roll.total >= target : null;
 
-    uses: "uses.value",
-    maximumUses: "uses.max",
-  },
+    return {
+      canceled: false,
+      result: roll.total,
+      target,
+      success,
+      levelOfSuccess: success == null ? null : success ? 100 : 0,
+      criticalSuccess,
+      criticalFailure,
+    };
+  }
 
-  currency: {
-    base: "gc",
-
+  return {
+    dataPaths: {
     actor: {
-      denominations: {
-        gc: "currency.gc",
-      },
+      type: "details.type.value",
+      subtype: "details.type.subtype",
+      size: "traits.size",
+      level: "details.level",
+      role: "",
+    },
+
+    health: {
+      current: "attributes.hp.value",
+      maximum: "attributes.hp.max",
+      temporary: "attributes.hp.temp",
+      minimum: "",
+
+      useWounds: false,
+      wounds: "",
+      maximumWounds: "",
     },
 
     item: {
-      single: {
-        value: "price",
-        denomination: "gc",
+      quantity: "quantity",
+      weight: "weight",
+
+      equipped: "equipped",
+      attuned: "attunement",
+
+      uses: "uses.value",
+      maximumUses: "uses.max",
+    },
+
+    currency: {
+      base: "gc",
+
+      actor: {
+        denominations: {
+          gc: "currency.gc",
+        },
       },
 
-      denominations: {},
+      item: {
+        single: {
+          value: "price",
+          denomination: "gc",
+        },
+
+        denominations: {},
+      },
+
+      denominations: {
+        gc: { value: 1 },
+      },
     },
 
-    denominations: {
-      gc: { value: 1 },
+    experience: {
+      current: "details.xp.value",
+      maximum: "details.xp.max",
+      level: "details.level",
     },
-  },
 
-  experience: {
-    current: "details.xp.value",
-    maximum: "details.xp.max",
-    level: "details.level",
-  },
+    features: {
+      supportsHealth: true,
+      supportsTemporaryHealth: true,
+      supportsWounds: false,
+      supportsCurrency: true,
+      supportsWeight: true,
+      supportsEquipment: true,
+    },
+    },
+    testsInterface: {
+    buildInputs: () => {
+      const choices = {};
+      const group = {
+        abilityCheck: game.i18n.localize("ripper-system-abstraction.tests.AbilityCheck"),
+        savingThrow: game.i18n.localize("ripper-system-abstraction.tests.SavingThrow"),
+        skill: game.i18n.localize("ripper-system-abstraction.tests.Skill"),
+        tool: game.i18n.localize("ripper-system-abstraction.tests.Tool"),
+      };
 
-  features: {
-    supportsHealth: true,
-    supportsTemporaryHealth: true,
-    supportsWounds: false,
-    supportsCurrency: true,
-    supportsWeight: true,
-    supportsEquipment: true,
-  },
-};
+      for (const [key, value] of Object.entries(CONFIG.SW5E.abilities)) {
+        choices[`check.${key}`] = { label: value, group: group.abilityCheck };
+        choices[`save.${key}`] = { label: value, group: group.savingThrow };
+      }
 
-class SW5ECheckInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.StringField({
-        label: "Check",
-        required: true,
-        choices,
-      }),
-    };
-  }
-}
+      choices["save.death"] = { label: game.i18n.localize("SW5E.DeathSave"), group: group.savingThrow };
 
-class SW5EDCInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.NumberField({
-        label: "DC",
-        required: false,
-        nullable: true,
-        integer: true,
-        min: 0,
-      }),
-    };
-  }
-}
+      for (const [key, value] of Object.entries(CONFIG.SW5E.skills)) {
+        choices[`skill.${key}`] = { label: value.label, group: group.skill };
+      }
 
-function normalizeRoll(roll, dc) {
-  if (!roll) {
-    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-  }
+      for (const [key, value] of Object.entries(CONFIG.SW5E.toolProficiencies)) {
+        choices[`tool.${key}`] = { label: value, group: group.tool };
+      }
 
-  const target = Number.isNumeric(roll.options?.targetValue) ? roll.options.targetValue : Number.isNumeric(dc) ? dc : null;
-  const criticalSuccess = roll.isCritical === true;
-  const criticalFailure = roll.isFumble === true;
-  const success = target != null ? roll.total >= target : null;
+      class CheckInput extends SW5ECheckInput {
+        static defineSchema() {
+          return {
+            value: new fields.StringField({
+              label: "ripper-system-abstraction.tests.Check",
+              required: true,
+              choices,
+            }),
+          };
+        }
+      }
 
-  return {
-    canceled: false,
-    result: roll.total,
-    target,
-    success,
-    levelOfSuccess: success == null ? null : success ? 100 : 0,
-    criticalSuccess,
-    criticalFailure,
+      return {
+        check: CheckInput,
+        dc: SW5EDCInput,
+      };
+    },
+
+    processCheck: async (actor, inputs, options = {}) => {
+      const [type, key] = inputs.check.split(".");
+      const rollOptions = {
+        fastForward: options.fastForward ?? false,
+        event: options.event,
+      };
+      if (inputs.dc != null) rollOptions.targetValue = inputs.dc;
+
+      switch (type) {
+        case "skill":
+          return normalizeRoll(await actor.rollSkill(key, rollOptions), inputs.dc);
+
+        case "save":
+          if (key === "death") {
+            return normalizeRoll(await actor.rollDeathSave(rollOptions), 10);
+          }
+
+          return normalizeRoll(await actor.rollAbilitySave(key, rollOptions), inputs.dc);
+
+        case "check":
+          return normalizeRoll(await actor.rollAbilityTest(key, rollOptions), inputs.dc);
+
+        case "tool": {
+          const item = actor.items.find(
+            (i) => i.type === "tool" && (i.system.toolType === key || i.system.baseItem === key),
+          );
+          if (!item) {
+            return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+          }
+
+          return normalizeRoll(await item.rollToolCheck(rollOptions), inputs.dc);
+        }
+
+        default:
+          throw new Error(`Unsupported SW5E check type: ${type}`);
+      }
+    },
+    },
   };
-}
-
-export const testsInterface = {
-  buildInputs: () => {
-    const choices = {};
-
-    for (const [key, value] of Object.entries(CONFIG.SW5E.abilities)) {
-      choices[`check.${key}`] = value;
-      choices[`save.${key}`] = value;
-    }
-
-    choices["save.death"] = game.i18n.localize("SW5E.DeathSave");
-
-    for (const [key, value] of Object.entries(CONFIG.SW5E.skills)) {
-      choices[`skill.${key}`] = value.label;
-    }
-
-    for (const [key, value] of Object.entries(CONFIG.SW5E.toolProficiencies)) {
-      choices[`tool.${key}`] = value;
-    }
-
-    class CheckInput extends SW5ECheckInput {
-      static defineSchema() {
-        return {
-          value: new fields.StringField({
-            label: "Check",
-            required: true,
-            choices,
-          }),
-        };
-      }
-    }
-
-    return {
-      check: CheckInput,
-      dc: SW5EDCInput,
-    };
-  },
-
-  processCheck: async (actor, inputs, options = {}) => {
-    const [type, key] = inputs.check.split(".");
-    const rollOptions = {
-      fastForward: options.fastForward ?? false,
-      event: options.event,
-    };
-    if (inputs.dc != null) rollOptions.targetValue = inputs.dc;
-
-    switch (type) {
-      case "skill":
-        return normalizeRoll(await actor.rollSkill(key, rollOptions), inputs.dc);
-
-      case "save":
-        if (key === "death") {
-          return normalizeRoll(await actor.rollDeathSave(rollOptions), 10);
-        }
-
-        return normalizeRoll(await actor.rollAbilitySave(key, rollOptions), inputs.dc);
-
-      case "check":
-        return normalizeRoll(await actor.rollAbilityTest(key, rollOptions), inputs.dc);
-
-      case "tool": {
-        const item = actor.items.find(
-          (i) => i.type === "tool" && (i.system.toolType === key || i.system.baseItem === key),
-        );
-        if (!item) {
-          return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-        }
-
-        return normalizeRoll(await item.rollToolCheck(rollOptions), inputs.dc);
-      }
-
-      default:
-        throw new Error(`Unsupported SW5E check type: ${type}`);
-    }
-  },
 };

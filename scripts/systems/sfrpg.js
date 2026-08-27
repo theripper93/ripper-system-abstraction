@@ -1,191 +1,200 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
-export const dataPaths = {
-  actor: {
-    type: "details.type",
-    subtype: "details.subtype",
-    size: "traits.size",
-    level: "details.level.value",
-    role: "",
-  },
+export default async function sfrpg() {
 
-  health: {
-    current: "attributes.hp.value",
-    maximum: "attributes.hp.max",
-    temporary: "attributes.hp.temp",
-    minimum: "",
+  class SFRPGCeckInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.StringField({
+          label: "ripper-system-abstraction.tests.Check",
+          required: true,
+          choices,
+        }),
+      };
+    }
+  }
 
-    useWounds: false,
-    wounds: "",
-    maximumWounds: "",
-  },
+  class SFRPGDCInput extends DataModel {
+    static defineSchema() {
+      return {
+        value: new fields.NumberField({
+          label: "ripper-system-abstraction.tests.DC",
+          required: false,
+          nullable: true,
+          integer: true,
+          min: 0,
+        }),
+      };
+    }
+  }
 
-  item: {
-    quantity: "quantity",
-    weight: "bulk",
+  function normalizeRoll(result, dc) {
+    if (!result) {
+      return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+    }
 
-    equipped: "equipped",
-    attuned: "",
+    const roll = result.roll;
+    const target = Number.isNumeric(dc) ? dc : null;
+    let success = null;
+    if (target != null) {
+      if (roll.d20Critical) success = true;
+      else if (roll.d20Fumble) success = false;
+      else success = roll.total >= target;
+    }
 
-    uses: "uses.value",
-    maximumUses: "uses.max",
-  },
-
-  currency: {
-    base: "credit",
-
-    actor: {
-      denominations: {
-        credit: "currency.credit",
-        upb: "currency.upb",
-      },
-    },
-
-    item: {
-      single: {
-        value: "price",
-        denomination: "credit",
-      },
-
-      denominations: {},
-    },
-
-    denominations: {
-      credit: { value: 1 },
-      upb: { value: 1 },
-    },
-  },
-
-  experience: {
-    current: "details.xp.value",
-    maximum: "details.xp.max",
-    level: "details.level.value",
-  },
-
-  features: {
-    supportsHealth: true,
-    supportsTemporaryHealth: true,
-    supportsWounds: false,
-    supportsCurrency: true,
-    supportsWeight: true,
-    supportsEquipment: true,
-  },
-};
-
-class SFRPGCeckInput extends DataModel {
-  static defineSchema() {
     return {
-      value: new fields.StringField({
-        label: "Check",
-        required: true,
-        choices,
-      }),
+      canceled: false,
+      result: roll.total,
+      target,
+      success,
+      levelOfSuccess: success == null ? null : success ? 100 : 0,
+      criticalSuccess: roll.d20Critical === true,
+      criticalFailure: roll.d20Fumble === true,
     };
-  }
-}
-
-class SFRPGDCInput extends DataModel {
-  static defineSchema() {
-    return {
-      value: new fields.NumberField({
-        label: "DC",
-        required: false,
-        nullable: true,
-        integer: true,
-        min: 0,
-      }),
-    };
-  }
-}
-
-function normalizeRoll(result, dc) {
-  if (!result) {
-    return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-  }
-
-  const roll = result.roll;
-  const target = Number.isNumeric(dc) ? dc : null;
-  let success = null;
-  if (target != null) {
-    if (roll.d20Critical) success = true;
-    else if (roll.d20Fumble) success = false;
-    else success = roll.total >= target;
   }
 
   return {
-    canceled: false,
-    result: roll.total,
-    target,
-    success,
-    levelOfSuccess: success == null ? null : success ? 100 : 0,
-    criticalSuccess: roll.d20Critical === true,
-    criticalFailure: roll.d20Fumble === true,
-  };
-}
+    dataPaths: {
+    actor: {
+      type: "details.type",
+      subtype: "details.subtype",
+      size: "traits.size",
+      level: "details.level.value",
+      role: "",
+    },
 
-export const testsInterface = {
-  buildInputs: () => {
-    const choices = {};
+    health: {
+      current: "attributes.hp.value",
+      maximum: "attributes.hp.max",
+      temporary: "attributes.hp.temp",
+      minimum: "",
 
-    for (const [key, value] of Object.entries(CONFIG.SFRPG.skills)) {
-      choices[`skill.${key}`] = game.i18n.localize(value);
-    }
+      useWounds: false,
+      wounds: "",
+      maximumWounds: "",
+    },
 
-    for (const [key, value] of Object.entries(CONFIG.SFRPG.abilities)) {
-      choices[`ability.${key}`] = game.i18n.localize(value);
-    }
+    item: {
+      quantity: "quantity",
+      weight: "bulk",
 
-    for (const [key, value] of Object.entries(CONFIG.SFRPG.saves)) {
-      choices[`save.${key}`] = game.i18n.localize(value);
-    }
+      equipped: "equipped",
+      attuned: "",
 
-    class CheckInput extends SFRPGCeckInput {
-      static defineSchema() {
-        return {
-          value: new fields.StringField({
-            label: "Check",
-            required: true,
-            choices,
-          }),
-        };
+      uses: "uses.value",
+      maximumUses: "uses.max",
+    },
+
+    currency: {
+      base: "credit",
+
+      actor: {
+        denominations: {
+          credit: "currency.credit",
+          upb: "currency.upb",
+        },
+      },
+
+      item: {
+        single: {
+          value: "price",
+          denomination: "credit",
+        },
+
+        denominations: {},
+      },
+
+      denominations: {
+        credit: { value: 1 },
+        upb: { value: 1 },
+      },
+    },
+
+    experience: {
+      current: "details.xp.value",
+      maximum: "details.xp.max",
+      level: "details.level.value",
+    },
+
+    features: {
+      supportsHealth: true,
+      supportsTemporaryHealth: true,
+      supportsWounds: false,
+      supportsCurrency: true,
+      supportsWeight: true,
+      supportsEquipment: true,
+    },
+    },
+    testsInterface: {
+    buildInputs: () => {
+      const choices = {};
+      const group = {
+        abilityCheck: game.i18n.localize("ripper-system-abstraction.tests.AbilityCheck"),
+        savingThrow: game.i18n.localize("ripper-system-abstraction.tests.SavingThrow"),
+        skill: game.i18n.localize("ripper-system-abstraction.tests.Skill"),
+      };
+
+      for (const [key, value] of Object.entries(CONFIG.SFRPG.skills)) {
+        choices[`skill.${key}`] = { label: game.i18n.localize(value), group: group.skill };
       }
-    }
 
-    return {
-      check: CheckInput,
-      dc: SFRPGDCInput,
-    };
-  },
+      for (const [key, value] of Object.entries(CONFIG.SFRPG.abilities)) {
+        choices[`ability.${key}`] = { label: game.i18n.localize(value), group: group.abilityCheck };
+      }
 
-  processCheck: async (actor, inputs, options = {}) => {
-    const [type, key] = inputs.check.split(".");
-    const rollOptions = {
-      skipUI: options.fastForward ?? false,
-      event: options.event,
-    };
-    if (inputs.dc != null) rollOptions.dc = inputs.dc;
+      for (const [key, value] of Object.entries(CONFIG.SFRPG.saves)) {
+        choices[`save.${key}`] = { label: game.i18n.localize(value), group: group.savingThrow };
+      }
 
-    let result;
-    switch (type) {
-      case "skill":
-        result = options.fastForward
-          ? await actor.rollSkillCheck(key, rollOptions)
-          : await actor.rollSkill(key, rollOptions);
-        break;
+      class CheckInput extends SFRPGCeckInput {
+        static defineSchema() {
+          return {
+            value: new fields.StringField({
+              label: "ripper-system-abstraction.tests.Check",
+              required: true,
+              choices,
+            }),
+          };
+        }
+      }
 
-      case "ability":
-        result = await actor.rollAbility(key, rollOptions);
-        break;
+      return {
+        check: CheckInput,
+        dc: SFRPGDCInput,
+      };
+    },
 
-      case "save":
-        result = await actor.rollSave(key, rollOptions);
-        break;
+    processCheck: async (actor, inputs, options = {}) => {
+      const [type, key] = inputs.check.split(".");
+      const rollOptions = {
+        skipUI: options.fastForward ?? false,
+        event: options.event,
+      };
+      if (inputs.dc != null) rollOptions.dc = inputs.dc;
 
-      default:
-        throw new Error(`Unsupported SFRPG check type: ${type}`);
-    }
+      let result;
+      switch (type) {
+        case "skill":
+          result = options.fastForward
+            ? await actor.rollSkillCheck(key, rollOptions)
+            : await actor.rollSkill(key, rollOptions);
+          break;
 
-    return normalizeRoll(result, inputs.dc);
-  },
+        case "ability":
+          result = await actor.rollAbility(key, rollOptions);
+          break;
+
+        case "save":
+          result = await actor.rollSave(key, rollOptions);
+          break;
+
+        default:
+          throw new Error(`Unsupported SFRPG check type: ${type}`);
+      }
+
+      return normalizeRoll(result, inputs.dc);
+    },
+    },
+  };
 };
