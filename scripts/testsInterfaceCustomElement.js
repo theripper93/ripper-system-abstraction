@@ -242,8 +242,7 @@ export class TestsInterfaceElement extends HTMLElement {
       return;
     }
 
-    const container = document.createElement("div");
-    container.classList.add("tests-interface");
+    this.classList.add("form-group");
 
     for (const [key, model] of Object.entries(inputClasses)) {
       const modelFields = model.schema?.fields ?? {};
@@ -252,16 +251,14 @@ export class TestsInterfaceElement extends HTMLElement {
 
       for (const name of names) {
         const field = modelFields[name];
-        const group = field.toFormGroup({ localize: true, stacked: true }, { blank: "" });
+        const group = field.toFormGroup({ localize: true, stacked: false }, { blank: "" });
         const control = group.querySelector("input, select, textarea");
         control?.addEventListener("input", () => this.#emit());
         control?.addEventListener("change", () => this.#emit());
-        container.append(group);
+        this.append(...group.children);
         this.#fields.push({ key, name, single, field, control });
       }
     }
-
-    this.append(container);
     this.#emit();
   }
 
