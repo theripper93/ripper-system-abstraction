@@ -26,6 +26,8 @@ export const dataPaths = {
     weight: "weight",
 
     equipped: "location.state",
+    equippedValue: "equipped",
+    unequippedValue: "carried",
     attuned: "",
 
     uses: "charges.value",

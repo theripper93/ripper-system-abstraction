@@ -71,6 +71,11 @@
  * maximumWounds:
  *   Maximum wounds/injuries.
  *
+ * invert (optional, default false):
+ *   When true, the stored `current`/`maximum` values count damage taken
+ *   rather than remaining health (e.g. damage trackers). The API interprets
+ *   add/remove/heal/damage and getCurrent accordingly.
+ *
  * ---------------------------------------------------------------------------
  * ITEM
  * ---------------------------------------------------------------------------
@@ -88,6 +93,12 @@
  *
  * attuned:
  *   Whether the item is attuned, bonded, or otherwise linked to the Actor.
+ *
+ * equippedValue / unequippedValue (optional):
+ *   For systems whose equipped field is not a boolean, these declare the
+ *   values representing the equipped and not-equipped states. A numeric
+ *   `equippedValue` is an inclusive threshold (value >= equippedValue);
+ *   a string is matched exactly.
  *
  * uses:
  *   Current remaining uses/charges.

@@ -3,13 +3,17 @@ import {showWelcome} from "./lib/welcome.js";
 import { registerSettings } from "./settings.js";
 import "./testsInterfaceCustomElement.js";
 import { buildInputs, parse, processCheck } from "./testsInterfaceCustomElement.js";
+import { api } from "./api/index.js";
 
 export const MODULE_ID = "ripper-system-abstraction";
 
 export const API = {
-    buildInputs,
-    parse,
-    processCheck,
+    ...api,
+    tests: {
+        buildInputs,
+        parse,
+        processCheck,
+    },
 };
 
 Hooks.on("init", () => {
@@ -102,7 +106,7 @@ async function runCheck(dialog) {
 
     resultElement.textContent = "Rolling...";
     try {
-        const result = await API.processCheck(actor, value, {
+        const result = await API.tests.processCheck(actor, value, {
             fastForward: fastForward.checked,
         });
         console.log("ripper-system-abstraction | Check result:", result);

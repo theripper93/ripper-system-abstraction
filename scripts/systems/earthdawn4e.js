@@ -19,6 +19,8 @@ export const dataPaths = {
     useWounds: true,
     wounds: "wounds",
     maximumWounds: "",
+
+    invert: true,
   },
 
   item: {
