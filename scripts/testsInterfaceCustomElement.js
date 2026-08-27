@@ -24,42 +24,18 @@ export function buildInputs(actor, systemId = game.system.id) {
 }
 
 /**
- * Normalize a StringField's choices into an array of {key, label} entries.
- *
- * @param {foundry.data.fields.StringField} field
- * @returns {Array<{key: string, label: string}>|null}
- */
-export function normalizeChoices(field) {
-  let choices = field.options?.choices ?? field.choices;
-  if (typeof choices === "function") choices = choices();
-  if (Array.isArray(choices)) {
-    return choices.map((value) => ({ key: value, label: value }));
-  }
-  if (choices && typeof choices === "object") {
-    return Object.entries(choices).map(([key, label]) => ({ key, label }));
-  }
-  return null;
-}
-
-/**
- * Coerce a raw string value into the type represented by a DataField.
+ * Coerce a raw value into the type represented by a DataField.
  *
  * @param {foundry.data.fields.DataField} field
- * @param {string} [value]
+ * @param {*} value
  * @returns {*}
  */
 export function coerceValue(field, value) {
+  const cleaned = field.clean(value);
   if (field instanceof foundry.data.fields.NumberField) {
-    if (value == null || value === "") return null;
-    const number = Number(value);
-    return Number.isFinite(number) ? number : null;
+    return (typeof cleaned === "number" && Number.isFinite(cleaned)) ? cleaned : null;
   }
-  if (field instanceof foundry.data.fields.BooleanField) {
-    if (value === "true") return true;
-    if (value === "false") return false;
-    return null;
-  }
-  return value ?? "";
+  return cleaned;
 }
 
 /**
@@ -125,6 +101,22 @@ export function parse(value, actor, systemId = game.system.id) {
 }
 
 /**
+ * Perform a check for the given actor using a serialized inputs string.
+ *
+ * The string is parsed back into a typed inputs object (via `parse`) which is
+ * then passed to the system's `processCheck`.
+ *
+ * @param {Actor} actor             The actor performing the check.
+ * @param {string} value            The serialized inputs string.
+ * @param {string} [systemId]       The Foundry system ID. Defaults to game.system.id.
+ * @returns {Promise<any>}          The native result of the system's check.
+ */
+export async function processCheck(actor, value, systemId = game.system.id) {
+  const inputs = parse(value, actor, systemId);
+  return getTestsInterface(systemId).processCheck(actor, inputs);
+}
+
+/**
  * A custom element which collects the inputs required to perform a check for
  * a specific actor, without executing the check itself.
  *
@@ -186,7 +178,7 @@ export class TestsInterfaceElement extends HTMLElement {
     }
 
     for (const entry of this.#fields) {
-      const rawValue = raw[entry.path];
+      const rawValue = raw[entry.single ? entry.key : `${entry.key}.${entry.name}`];
       if (rawValue !== undefined) entry.control.value = rawValue;
     }
 
@@ -260,78 +252,17 @@ export class TestsInterfaceElement extends HTMLElement {
 
       for (const name of names) {
         const field = modelFields[name];
-        const path = single ? key : `${key}.${name}`;
-        const control = this.#renderField(field);
-
-        const row = document.createElement("label");
-        row.classList.add("tests-interface-input");
-
-        const label = document.createElement("span");
-        label.classList.add("tests-interface-label");
-        label.textContent = game.i18n.localize(field.options?.label ?? name);
-
-        row.append(label, control);
-        container.append(row);
-
-        this.#fields.push({ key, name, path, single, field, control });
+        const group = field.toFormGroup({ localize: true, stacked: true }, { blank: "" });
+        const control = group.querySelector("input, select, textarea");
+        control?.addEventListener("input", () => this.#emit());
+        control?.addEventListener("change", () => this.#emit());
+        container.append(group);
+        this.#fields.push({ key, name, single, field, control });
       }
     }
 
     this.append(container);
     this.#emit();
-  }
-
-  #renderField(field) {
-    if (field instanceof foundry.data.fields.StringField) {
-      const choices = normalizeChoices(field);
-      const initial = field.options?.initial ?? "";
-
-      if (choices) {
-        const select = document.createElement("select");
-        select.classList.add("tests-interface-control");
-
-        const blank = document.createElement("option");
-        blank.value = "";
-        select.append(blank);
-
-        for (const choice of choices) {
-          const option = document.createElement("option");
-          option.value = choice.key;
-          option.textContent = game.i18n.localize(choice.label ?? choice.key);
-          select.append(option);
-        }
-
-        select.value = initial;
-        select.addEventListener("change", () => this.#emit());
-        return select;
-      }
-
-      const input = document.createElement("input");
-      input.classList.add("tests-interface-control");
-      input.type = "text";
-      input.value = initial;
-      if (field.options?.placeholder) input.placeholder = game.i18n.localize(field.options.placeholder);
-      input.addEventListener("input", () => this.#emit());
-      return input;
-    }
-
-    if (field instanceof foundry.data.fields.NumberField) {
-      const input = document.createElement("input");
-      input.classList.add("tests-interface-control");
-      input.type = "number";
-      if (field.options?.integer) input.step = "1";
-      if (field.options?.min != null) input.min = field.options.min;
-      if (field.options?.max != null) input.max = field.options.max;
-      if (field.options?.initial != null) input.value = field.options.initial;
-      input.addEventListener("input", () => this.#emit());
-      return input;
-    }
-
-    const input = document.createElement("input");
-    input.classList.add("tests-interface-control");
-    input.type = "text";
-    input.addEventListener("input", () => this.#emit());
-    return input;
   }
 
   #emit() {
