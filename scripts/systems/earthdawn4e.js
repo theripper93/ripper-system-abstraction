@@ -2,6 +2,7 @@ const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
 export default async function earthdawn4e() {
+  const rate = Number(game.settings.get("earthdawn4e", "moneyConversionRate")) || 10;
 
   const EARTHDAWN_ATTRIBUTES = {
     dexterityStep: "earthdawn.d.dexterity",
@@ -57,7 +58,10 @@ export default async function earthdawn4e() {
       type: "actorType",
       subtype: "",
       size: "",
-      level: "",
+      level: (actor) => {
+        const circles = actor.items.filter((item) => item.type === "discipline").map((item) => Number(item.system.circle) || 0);
+        return circles.length ? Math.max(...circles) : null;
+      },
       role: "",
     },
 
@@ -76,10 +80,10 @@ export default async function earthdawn4e() {
 
     item: {
       quantity: "amount",
-      weight: "weight",
+      weight: (item) => (item.system.weight === "" || item.system.weight == null ? null : Number(item.system.weight)),
 
       equipped: "worn",
-      attuned: "isthread",
+      attuned: "",
 
       uses: "",
       maximumUses: "",
@@ -98,7 +102,7 @@ export default async function earthdawn4e() {
 
       item: {
         single: {
-          value: "",
+          value: "cost",
           denomination: "",
         },
 
@@ -106,16 +110,15 @@ export default async function earthdawn4e() {
       },
 
       denominations: {
-        gold: { value: 10 },
-        silver: { value: 1 },
-        copper: { value: 0.1 },
+        gold: { value: rate, label: "earthdawn.c.coinGoldGold" },
+        silver: { value: 1, label: "earthdawn.c.coinSilverSilver" },
+        copper: { value: 1 / rate, label: "earthdawn.c.coinCopperCopper" },
       },
     },
 
     experience: {
       current: "legendpointcurrent",
       maximum: "",
-      level: "",
     },
 
     features: {
@@ -156,23 +159,35 @@ export default async function earthdawn4e() {
 
     processCheck: async (actor, inputs, options = {}) => {
       if (!options.fastForward) {
-        actor.rollPrep({
+        const { rollPrep } = await import(/* webpackIgnore: true */ foundry.utils.getRoute("systems/earthdawn4e/modules/helpers/roll-prep.js"));
+        const rolled = await rollPrep(actor, {
           attribute: inputs.check,
           name: game.i18n.localize(EARTHDAWN_ATTRIBUTES[inputs.check]),
           modifier: inputs.modifier ?? 0,
           difficulty: inputs.difficulty ?? 0,
         });
-
-        return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+        if (!rolled) {
+          return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+        }
+        const target = rolled.difficulty > 0 ? Number(rolled.difficulty) : null;
+        return {
+          canceled: false,
+          result: rolled.total,
+          target,
+          success: target ? rolled.total >= target : null,
+          levelOfSuccess: target ? Math.clamp(50 + (rolled.total - target) * 2, 0, 100) : null,
+          criticalSuccess: false,
+          criticalFailure: false,
+        };
       }
 
-      const wounds = actor.woundCalc?.(Number(actor.system.wounds) + Number(actor.system.bloodMagicWounds)) ?? 0;
+      const wounds = actor.woundCalc?.((Number(actor.system.wounds) || 0) + (Number(actor.system.bloodMagicWounds) || 0)) ?? 0;
       const finalstep = Math.max(
         1,
         (actor.system[inputs.check] ?? 0) +
           (inputs.modifier ?? 0) -
           wounds +
-          (Number(actor.system.bonuses?.allRollsStepFinal) ?? 0)
+          (Number(actor.system.bonuses?.allRollsStepFinal) || 0)
       );
 
       const dice = actor.getDice(finalstep);

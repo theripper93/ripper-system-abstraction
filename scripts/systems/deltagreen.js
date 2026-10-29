@@ -133,6 +133,7 @@ export default async function deltagreen() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
+      if (!actor.system.statistics) throw new Error(`Delta Green actors of type "${actor.type}" cannot perform checks.`);
       const DGPercentileRoll = CONFIG.Dice.rolls.find((roll) => roll.name === "DGPercentileRoll");
       if (!DGPercentileRoll) {
         return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };

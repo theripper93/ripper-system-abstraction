@@ -34,7 +34,8 @@ export default async function castlesAndCrusades() {
     actor: {
       type: "type.value",
       subtype: "",
-      size: "size.value",
+      size: (actor) => String(actor.system.size?.value ?? "").trim().charAt(0).toUpperCase(),
+      sizes: { T: 0.5, S: 1, M: 1, L: 2, H: 3, G: 4 },
       level: "level.value",
       role: "",
     },
@@ -75,7 +76,7 @@ export default async function castlesAndCrusades() {
 
       item: {
         single: {
-          value: "",
+          value: "price.value",
           denomination: "",
         },
 
@@ -93,7 +94,15 @@ export default async function castlesAndCrusades() {
     experience: {
       current: "xp.value",
       maximum: "xp.next",
-      level: "level.value",
+    },
+
+    overrides: {
+      Actor: {
+        monster: {
+          actor: { level: "hitDice.number" },
+          experience: { current: "", maximum: "" },
+        },
+      },
     },
 
     features: {
@@ -134,7 +143,7 @@ export default async function castlesAndCrusades() {
     processCheck: async (actor, inputs, options = {}) => {
       const data = actor.getRollData();
       const ability = data.abilities?.[inputs.check];
-      if (!ability) throw new Error(`Unknown C&C ability: ${inputs.check}`);
+      if (!ability) throw new Error(`C&C actors of type "${actor.type}" cannot perform checks.`);
 
       const roll = await new Roll(
         `1d20 + ${ability.bonus ?? 0} + ${data.level?.value ?? 0}`,

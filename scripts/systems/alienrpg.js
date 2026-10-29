@@ -1,3 +1,4 @@
+import { captureRollMessage } from "./_shared.js";
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
@@ -159,26 +160,13 @@ export default async function alienrpg() {
       }
 
       const canceled = { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-      const suppressed = options.suppressedMessages;
-      const suppressedBefore = suppressed?.length ?? 0;
-      let posted = null;
-      const hookId = Hooks.on("createChatMessage", (message) => {
-        if (message.author?.id === game.user.id) posted = message;
-      });
-
-      try {
-        const response = await actor.abilityRoll(actor, dataset, options.fastForward ?? false);
-        if (response === "cancelled") return canceled;
-        for (let i = 0; i < 60 && !posted && !(suppressed?.length > suppressedBefore); i++) {
-          await new Promise((r) => setTimeout(r, 50));
-        }
-      } finally {
-        Hooks.off("createChatMessage", hookId);
-      }
-
-      if (!posted && !(suppressed?.length > suppressedBefore)) {
-        throw new Error(`Alien RPG: ${actor.name} has no dice to roll for ${inputs.check}.`);
-      }
+      let response;
+      const message = await captureRollMessage(async () => {
+        response = await actor.abilityRoll(actor, dataset, options.fastForward ?? false);
+        return response !== "cancelled";
+      }, options);
+      if (response === "cancelled") return canceled;
+      if (!message) throw new Error(`Alien RPG: ${actor.name} has no dice to roll for ${inputs.check}.`);
 
       const rollArr = game.alienrpg.rollArr;
       const sixes = (rollArr.r1Six ?? 0) + (rollArr.r2Six ?? 0);

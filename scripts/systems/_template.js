@@ -23,6 +23,9 @@
  *   first candidate holding a value on the document is used.
  * - Use a function `(document) => value` for derived values that cannot be
  *   expressed as a single path. Function specs are read-only.
+ * - Use an accessor `{ get(document), set(document, value) }` for writable
+ *   values spread over several fields; `set` returns the update payload
+ *   (e.g. `{ "system.a": 1, "system.b": 2 }`).
  * - Boolean properties are feature flags describing whether a system
  *   supports a particular concept.
  *
@@ -110,6 +113,10 @@
  *
  * attunedValue / unattunedValue (optional):
  *   Same as equippedValue / unequippedValue, for non-boolean attunement.
+ *
+ * stackable (optional function):
+ *   `(item) => boolean` for systems where only some items may hold a
+ *   quantity above one. Quantity writes above one throw for other items.
  *
  * equippable / attunable (optional functions):
  *   `(item) => boolean` for systems where only some items carrying the field
@@ -230,6 +237,14 @@
  *     Actor: { npc: { actor: { level: "details.cr" }, experience: { current: "" } } },
  *     Item: { spell: { item: { quantity: "" } } },
  *   }
+ *
+ * ---------------------------------------------------------------------------
+ * AFTER UPDATE
+ * ---------------------------------------------------------------------------
+ *
+ * afterUpdate (optional async function):
+ *   `(document, changes) => Promise` awaited after every write the API makes,
+ *   for systems that mirror document data elsewhere and need it synced.
  *
  * ---------------------------------------------------------------------------
  * FEATURES

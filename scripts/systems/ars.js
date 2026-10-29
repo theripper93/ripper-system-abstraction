@@ -31,13 +31,19 @@ export default async function ars() {
     };
   }
 
+  const ARS = game.ars.config;
+  const coinValues = ARS.currencyValue[ARS.settings.systemVariant] ?? ARS.currencyValue[0];
+  const coinItems = (actor) => actor.items.filter((item) => item.type === "currency"
+    && (actor.type === "lootable" || item.system.location?.state === "carried"));
+
   return {
     dataPaths: {
     actor: {
       type: "",
       subtype: "",
       size: "attributes.size",
-      level: "",
+      sizes: () => (String(ARS.settings.systemVariant) === "0" ? ARS.tokenSizeMappingVariant0 : ARS.tokenSizeMapping),
+      level: (actor) => (actor.classes?.length ? Math.max(...actor.classes.map((c) => Object.keys(c.system.advancement ?? {}).length)) : null),
       role: "",
     },
 
@@ -69,12 +75,31 @@ export default async function ars() {
       base: "gp",
 
       actor: {
-        denominations: {
-          pp: "currency.pp",
-          ep: "currency.ep",
-          gp: "currency.gp",
-          sp: "currency.sp",
-          cp: "currency.cp",
+        denominations: { pp: "", ep: "", gp: "", sp: "", cp: "" },
+        handler: {
+          get: (actor) => {
+            const wallet = Object.fromEntries(Object.keys(coinValues).map((key) => [key, 0]));
+            for (const coin of coinItems(actor)) {
+              const key = coin.system.cost.currency.toLowerCase();
+              if (key in wallet) wallet[key] += parseInt(coin.system.quantity) || 0;
+            }
+            return wallet;
+          },
+          set: async (actor, amounts) => {
+            const updates = [];
+            const create = {};
+            for (const [key, target] of Object.entries(amounts)) {
+              const [first, ...rest] = coinItems(actor).filter((coin) => coin.system.cost.currency.toLowerCase() === key);
+              if (!first) {
+                if (target > 0) create[key] = target;
+                continue;
+              }
+              updates.push({ _id: first.id, "system.quantity": target });
+              for (const extra of rest) updates.push({ _id: extra.id, "system.quantity": 0 });
+            }
+            if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
+            if (Object.keys(create).length) await actor.giveSpecificCurrencies(create);
+          },
         },
       },
 
@@ -87,19 +112,25 @@ export default async function ars() {
         denominations: {},
       },
 
-      denominations: {
-        cp: { value: 0.005 },
-        sp: { value: 0.05 },
-        ep: { value: 0.5 },
-        gp: { value: 1 },
-        pp: { value: 5 },
-      },
+      denominations: Object.fromEntries(Object.entries(coinValues).map(([key, copper]) => [key, {
+        value: copper / coinValues.gp,
+        label: ARS.currency[key],
+        icon: ARS.icons?.general?.currency?.[key] ?? null,
+        change: key !== "ep",
+      }])),
     },
 
     experience: {
-      current: "details.xp",
+      current: "",
       maximum: "",
-      level: "",
+    },
+
+    overrides: {
+      Actor: {
+        npc: {
+          actor: { level: (actor) => parseInt(actor.system.hitdice) || null },
+        },
+      },
     },
 
     features: {

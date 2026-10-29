@@ -51,11 +51,13 @@ export default async function dnd4e() {
   return {
     dataPaths: {
     actor: {
-      type: "",
-      subtype: "details.type",
+      type: "details.type",
+      typeChoices: () => CONFIG.DND4E.creatureType,
+      subtype: "details.origin",
       size: "details.size",
+      sizes: { tiny: 0.5, sm: 1, med: 1, lg: 2, huge: 3, grg: 4 },
       level: "details.level",
-      role: "",
+      role: "details.role.primary",
     },
 
     health: {
@@ -114,7 +116,13 @@ export default async function dnd4e() {
     experience: {
       current: "details.exp",
       maximum: "",
-      level: "details.level",
+      },
+
+    overrides: {
+      Actor: {
+        NPC: { experience: { current: "" } },
+        Hazard: { experience: { current: "" } },
+      },
     },
 
     features: {

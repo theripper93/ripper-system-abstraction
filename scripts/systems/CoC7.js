@@ -67,15 +67,15 @@ export default async function CoC7() {
     equipped: "",
     attuned: "",
 
-    uses: "",
-    maximumUses: "",
+    uses: "ammo",
+    maximumUses: "bullets",
   },
 
   currency: {
-    base: "",
+    base: "cash",
 
     actor: {
-      denominations: {},
+      denominations: { cash: "monetary.cash" },
     },
 
     item: {
@@ -87,20 +87,23 @@ export default async function CoC7() {
       denominations: {},
     },
 
-    denominations: {},
+    denominations: {
+
+      cash: { value: 1, label: "CoC7.MonetaryCash" },
+
+    },
   },
 
   experience: {
     current: "",
     maximum: "",
-    level: "",
   },
 
   features: {
     supportsHealth: true,
     supportsTemporaryHealth: false,
     supportsWounds: false,
-    supportsCurrency: false,
+    supportsCurrency: true,
     supportsWeight: true,
     supportsEquipment: false,
   },

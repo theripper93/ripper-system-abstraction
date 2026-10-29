@@ -17,6 +17,7 @@
             "Attribute": "Attribute",
             "Characteristic": "Characteristic",
             "Stat": "Stat",
+            "Pool": "Pool",
             "Actor": "Actor",
             "FastForward": "Fast Forward",
             "Silent": "Silent",

@@ -1,3 +1,4 @@
+import { captureRollMessage } from "./_shared.js";
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
@@ -98,7 +99,7 @@ export default async function cyberpunk2020() {
 
       useWounds: true,
       wounds: "damage",
-      maximumWounds: "",
+      maximumWounds: () => 40,
     },
 
     item: {
@@ -138,7 +139,6 @@ export default async function cyberpunk2020() {
     experience: {
       current: "ip",
       maximum: "",
-      level: "",
     },
 
     features: {
@@ -191,74 +191,38 @@ export default async function cyberpunk2020() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
-      const [type, key] = inputs.check.split(":");
+      const separator = inputs.check.indexOf(".");
+      const type = inputs.check.slice(0, separator);
+      const key = inputs.check.slice(separator + 1);
+      if (!actor.system.stats) throw new Error(`Cyberpunk 2020 actors of type "${actor.type}" cannot perform checks.`);
 
+      let trigger;
       if (type === "stat") {
-        const roll = await new Promise((resolve) => {
-          const hook = (message) => {
-            Hooks.off("createChatMessage", hook);
-            resolve(message.rolls?.[0] ?? null);
-          };
-          Hooks.once("createChatMessage", hook);
-          actor.rollStat(key);
-          setTimeout(() => {
-            Hooks.off("createChatMessage", hook);
-            resolve(null);
-          }, 1000);
-        });
-
-        if (!roll) {
-          return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-        }
-
-        const { target, success, levelOfSuccess } = difficultyResult(roll, inputs.difficulty);
-        return {
-          canceled: false,
-          result: roll.total,
-          target,
-          success,
-          levelOfSuccess,
-          criticalSuccess: roll.isCrit === true,
-          criticalFailure: roll.isFumble === true,
-        };
-      }
-
-      if (type === "skill") {
+        if (!(key in actor.system.stats)) throw new Error(`Unknown Cyberpunk 2020 stat: ${key}`);
+        trigger = () => actor.rollStat(key);
+      } else if (type === "skill") {
         const item = actor.items.find((i) => i.type === "skill" && i.name === key);
-        if (!item) {
-          return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-        }
-
-        const roll = await new Promise((resolve) => {
-          const hook = (message) => {
-            Hooks.off("createChatMessage", hook);
-            resolve(message.rolls?.[0] ?? null);
-          };
-          Hooks.once("createChatMessage", hook);
-          actor.rollSkill(item.id, inputs.modifier ?? 0);
-          setTimeout(() => {
-            Hooks.off("createChatMessage", hook);
-            resolve(null);
-          }, 1000);
-        });
-
-        if (!roll) {
-          return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-        }
-
-        const { target, success, levelOfSuccess } = difficultyResult(roll, inputs.difficulty);
-        return {
-          canceled: false,
-          result: roll.total,
-          target,
-          success,
-          levelOfSuccess,
-          criticalSuccess: roll.isCrit === true,
-          criticalFailure: roll.isFumble === true,
-        };
+        if (!item) throw new Error(`${actor.name} does not have the Cyberpunk 2020 skill "${key}".`);
+        trigger = () => actor.rollSkill(item.id, inputs.modifier ?? 0);
+      } else {
+        throw new Error(`Unsupported Cyberpunk 2020 check type: ${type}`);
       }
 
-      throw new Error(`Unsupported Cyberpunk 2020 check type: ${type}`);
+      const roll = (await captureRollMessage(trigger, options))?.rolls?.[0];
+      if (!roll) {
+        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      }
+      const { target, success, levelOfSuccess } = difficultyResult(roll, inputs.difficulty);
+      const natural = roll.dice[0]?.results[0]?.result;
+      return {
+        canceled: false,
+        result: roll.total,
+        target,
+        success,
+        levelOfSuccess,
+        criticalSuccess: natural === 10,
+        criticalFailure: natural === 1,
+      };
     },
     },
   };

@@ -96,10 +96,20 @@ export default async function fallout() {
       const group = {
         attribute: game.i18n.localize("ripper-system-abstraction.tests.Attribute"),
         skill: game.i18n.localize("ripper-system-abstraction.tests.Skill"),
+        creature: game.i18n.localize("TYPES.Actor.creature"),
       };
 
       for (const [key, label] of Object.entries(CONFIG.FALLOUT.ATTRIBUTES)) {
         choices[`attribute.${key}`] = { label: game.i18n.localize(label), group: group.attribute };
+      }
+
+      for (const attribute of ["body", "mind"]) {
+        for (const skill of ["melee", "guns", "other"]) {
+          choices[`creature.${attribute}.${skill}`] = {
+            label: `${game.i18n.localize(`FALLOUT.CREATURE.${attribute}`)} + ${game.i18n.localize(`FALLOUT.CREATURE.${skill}`)}`,
+            group: group.creature,
+          };
+        }
       }
 
       const pack = game.packs.get("fallout.skills");
@@ -128,11 +138,19 @@ export default async function fallout() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
-      const [type, key] = inputs.check.split(".");
+      const [type, key, creatureSkill] = inputs.check.split(".");
+      const isCreature = actor.type === "creature";
+      if (!actor.system.attributes && !isCreature) throw new Error(`Fallout actors of type "${actor.type}" cannot perform checks.`);
+      if (isCreature !== (type === "creature")) throw new Error(`Fallout ${actor.type} actors cannot perform "${inputs.check}" checks.`);
       const complication = parseInt(actor.system.complication) || 20;
-      const rollData = { actor, dicenum: 2, complication, event: options.event };
+      const rollData = { actor, dicenum: 2, complication };
 
-      if (type === "attribute") {
+      if (type === "creature") {
+        rollData.rollname = `${game.i18n.localize(`FALLOUT.CREATURE.${key}`)} + ${game.i18n.localize(`FALLOUT.CREATURE.${creatureSkill}`)}`;
+        rollData.attribute = actor.system[key]?.value ?? 0;
+        rollData.skill = actor.system[creatureSkill]?.value ?? 0;
+        rollData.tag = false;
+      } else if (type === "attribute") {
         rollData.rollname = game.i18n.localize(CONFIG.FALLOUT.ATTRIBUTES[key]);
         rollData.attribute = actor.system.attributes[key]?.value ?? 0;
         rollData.skill = 0;
@@ -151,7 +169,13 @@ export default async function fallout() {
         throw new Error(`Unsupported Fallout check type: ${type}`);
       }
 
-      const result = await fallout.Roller2D20.rollD20(rollData);
+      const { Roller2D20, Dialog2d20 } = globalThis.fallout;
+      const result = options.fastForward
+        ? await Roller2D20.rollD20(rollData)
+        : await Dialog2d20.createDialog({ ...rollData, rollName: rollData.rollname, diceNum: rollData.dicenum });
+      if (!result) {
+        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      }
 
       const successes = result.dicesRolled.reduce((sum, d) => sum + (d.success ?? 0), 0);
       const crits = result.dicesRolled.reduce((sum, d) => sum + (d.success === 2 ? 1 : 0), 0);
@@ -164,7 +188,7 @@ export default async function fallout() {
         success: successes >= 1,
         levelOfSuccess: successes >= 2 ? 100 : successes === 1 ? 50 : 0,
         criticalSuccess: crits > 0,
-        criticalFailure: false,
+        criticalFailure: result.dicesRolled.some((d) => d.complication > 0),
       };
     },
     },

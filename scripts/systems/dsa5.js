@@ -1,6 +1,9 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
+const COIN_BY_VALUE = { 10: "dukaten", 1: "silbertaler", 0.1: "heller", 0.01: "kreuzer" };
+const COIN_LABELS = { dukaten: "Money-D", silbertaler: "Money-S", heller: "Money-H", kreuzer: "Money-K" };
+
 export default async function dsa5() {
   try {
     const pack = game.packs?.get?.(game.i18n.lang === "de" ? "dsa5.skills" : "dsa5.skillsen");
@@ -69,31 +72,56 @@ export default async function dsa5() {
       base: "silbertaler",
 
       actor: {
-        denominations: {},
+        denominations: { dukaten: "", silbertaler: "", heller: "", kreuzer: "" },
+        handler: {
+          get: (actor) => {
+            if (!actor.items.some((item) => item.type === "money")) return {};
+            const wallet = { dukaten: 0, silbertaler: 0, heller: 0, kreuzer: 0 };
+            for (const coin of actor.items) {
+              const key = coin.type === "money" && COIN_BY_VALUE[coin.system.price?.value];
+              if (key) wallet[key] += Number(coin.system.quantity?.value) || 0;
+            }
+            return wallet;
+          },
+          set: async (actor, amounts) => {
+            const updates = [];
+            const create = [];
+            for (const [key, target] of Object.entries(amounts)) {
+              const coin = actor.items.find((item) => item.type === "money" && COIN_BY_VALUE[item.system.price?.value] === key);
+              if (!coin) {
+                const value = Number(Object.keys(COIN_BY_VALUE).find((v) => COIN_BY_VALUE[v] === key));
+                create.push({ name: game.i18n.localize(COIN_LABELS[key]), type: "money", img: `systems/dsa5/icons/${COIN_LABELS[key]}.webp`, system: { price: { value }, quantity: { value: target } } });
+                continue;
+              }
+              updates.push({ _id: coin.id, "system.quantity.value": target });
+            }
+            if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
+            if (create.length) await actor.createEmbeddedDocuments("Item", create);
+          },
+        },
       },
 
       item: {
         single: {
           value: "price.value",
-          denomination: "silbertaler",
+          denomination: "",
         },
 
         denominations: {},
       },
 
       denominations: {
-        dukaten: { value: 10 },
-        silbertaler: { value: 1 },
-        heller: { value: 0.1 },
-        kreuzer: { value: 0.01 },
+        dukaten: { value: 10, label: "Money-D", icon: "systems/dsa5/icons/money-D.webp" },
+        silbertaler: { value: 1, label: "Money-S", icon: "systems/dsa5/icons/money-S.webp" },
+        heller: { value: 0.1, label: "Money-H", icon: "systems/dsa5/icons/money-H.webp" },
+        kreuzer: { value: 0.01, label: "Money-K", icon: "systems/dsa5/icons/money-K.webp" },
       },
     },
 
     experience: {
-      current: "details.experience.current",
+      current: "details.experience.total",
       maximum: "",
-      level: "",
-    },
+      },
 
     features: {
       supportsHealth: true,
@@ -144,6 +172,7 @@ export default async function dsa5() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
+      if (!actor.system.characteristics) throw new Error(`DSA5 actors of type "${actor.type}" cannot perform checks.`);
       const rollOptions = {
         bypass: options.fastForward ?? false,
         event: options.event,
@@ -172,7 +201,8 @@ export default async function dsa5() {
       } else {
         const key = Object.keys(game.dsa5.config.characteristics).find((k) => {
           const label = game.i18n.localize(game.dsa5.config.characteristics[k]);
-          return k === inputs.check || label === inputs.check;
+          const name = inputs.check.replace(/^attribute\./, "");
+          return k === name || label === name;
         });
         if (!key) {
           throw new Error(`Unknown DSA5 characteristic: ${inputs.check}`);
@@ -185,7 +215,7 @@ export default async function dsa5() {
         return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
       }
 
-      const outcome = await actor.basicTest(setupData);
+      const outcome = await actor.basicTest(setupData, options.silent ? { suppressMessage: true } : {});
       if (!outcome) {
         return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
       }

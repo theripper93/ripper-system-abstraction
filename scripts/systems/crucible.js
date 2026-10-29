@@ -57,11 +57,12 @@ export default async function crucible() {
   return {
     dataPaths: {
     actor: {
-      type: "",
+      type: "details.taxonomy.category",
+      typeChoices: () => SYSTEM.ACTOR.CREATURE_CATEGORIES,
       subtype: "",
       size: "movement.size",
       level: "advancement.level",
-      role: "",
+      role: "advancement.rank",
     },
 
     health: {
@@ -81,6 +82,7 @@ export default async function crucible() {
 
       equipped: "equipped",
       attuned: "invested",
+      stackable: (item) => item.system.properties?.has?.("stackable") && !item.system.equipped,
 
       uses: "uses.value",
       maximumUses: "uses.max",
@@ -90,30 +92,36 @@ export default async function crucible() {
       base: "cp",
 
       actor: {
-        denominations: {},
+        denominations: { cp: "", sp: "", gp: "", pp: "" },
+        handler: {
+          get: (actor) => (actor.system.currency === undefined ? {} : globalThis.crucible.api.documents.CrucibleActor.allocateCurrency(actor.system.currency)),
+          set: (actor, amounts) => {
+            const wallet = { ...globalThis.crucible.api.documents.CrucibleActor.allocateCurrency(actor.system.currency ?? 0), ...amounts };
+            const total = Object.entries(wallet).reduce((sum, [key, amount]) => sum + amount * (SYSTEM.ACTOR.CURRENCY_DENOMINATIONS[key]?.multiplier ?? 0), 0);
+            return actor.update({ "system.currency": Math.round(total) });
+          },
+        },
       },
 
       item: {
         single: {
           value: "price",
-          denomination: "cp",
+          denomination: "",
         },
 
         denominations: {},
       },
 
-      denominations: {
-        cp: { value: 1 },
-        sp: { value: 10 },
-        gp: { value: 100 },
-        pp: { value: 1000 },
-      },
+      denominations: Object.fromEntries(Object.entries(SYSTEM.ACTOR.CURRENCY_DENOMINATIONS).map(([key, entry]) => [key, {
+          value: entry.multiplier,
+          label: entry.label,
+          icon: entry.icon ?? null,
+        }])),
     },
 
     experience: {
-      current: "",
-      maximum: "",
-      level: "advancement.level",
+      current: "advancement.milestones",
+      maximum: "advancement.next",
     },
 
     features: {
@@ -123,13 +131,14 @@ export default async function crucible() {
       supportsCurrency: true,
       supportsWeight: true,
       supportsEquipment: true,
+      supportsAttunement: true,
     },
     },
     testsInterface: {
     buildInputs: () => {
       const choices = {};
 
-      for (const skill of globalThis.SYSTEM?.SKILLS ?? []) {
+      for (const skill of Object.values(SYSTEM.SKILLS)) {
         choices[skill.id] = game.i18n.localize(skill.label);
       }
 
@@ -152,9 +161,11 @@ export default async function crucible() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
+      if (!actor.system.skills) throw new Error(`Crucible actors of type "${actor.type}" cannot perform checks.`);
       const check = await actor.rollSkill(inputs.check, {
-        dc: inputs.dc,
+        dc: inputs.dc ?? undefined,
         chatMessage: !options.silent,
+        dialog: !options.fastForward,
       });
 
       return normalizeCheck(check);

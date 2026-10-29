@@ -33,8 +33,9 @@ export default async function daggerheart() {
     dataPaths: {
     actor: {
       type: "",
-      subtype: "type",
+      subtype: "",
       size: "size",
+      sizes: () => game.settings.get(CONFIG.DH.id, CONFIG.DH.SETTINGS.gameSettings.Homebrew)?.tokenSizes ?? {},
       level: "levelData.level.current",
       role: "",
     },
@@ -95,7 +96,14 @@ export default async function daggerheart() {
     experience: {
       current: "",
       maximum: "",
-      level: "levelData.level.current",
+    },
+
+    overrides: {
+      Actor: {
+        adversary: {
+          actor: { level: "tier", role: "type" },
+        },
+      },
     },
 
     features: {
@@ -134,6 +142,9 @@ export default async function daggerheart() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
+      if (!["character", "companion", "adversary"].includes(actor.type)) {
+        throw new Error(`Daggerheart actors of type "${actor.type}" cannot perform checks.`);
+      }
       const rollOptions = { event: options.event };
       if (options.fastForward) rollOptions.dialog = { configure: false };
       if (inputs.difficulty != null) {
@@ -159,7 +170,7 @@ export default async function daggerheart() {
         result: roll?.total ?? null,
         target: difficulty,
         success,
-        levelOfSuccess: success == null ? null : success ? 100 : 0,
+        levelOfSuccess: success == null ? null : criticalSuccess ? 100 : roll?.result?.duality === 1 ? (success ? 100 : 33) : roll?.result?.duality === -1 ? (success ? 66 : 0) : success ? 100 : 0,
         criticalSuccess,
         criticalFailure: false,
       };

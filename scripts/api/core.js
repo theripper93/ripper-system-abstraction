@@ -48,28 +48,33 @@ export function resolvePath(spec, document) {
 
 /**
  * Read the value at a dataPaths spec from a document's system data. A spec
- * may also be a function `(document) => value` for derived, read-only data.
+ * may also be a function `(document) => value` for derived, read-only data,
+ * or an accessor `{ get(document), set(document, value) }` for values spread
+ * over several fields.
  *
  * @param {Document} document
- * @param {string|string[]|Function} spec
+ * @param {string|string[]|Function|Object} spec
  * @returns {*}
  */
 export function getPath(document, spec) {
   if (typeof spec === "function") return spec(document);
+  if (typeof spec?.get === "function") return spec.get(document);
   const path = resolvePath(spec, document);
   if (!path) return undefined;
   return foundry.utils.getProperty(document.system, path);
 }
 
 /**
- * Build the update payload entry for a dataPaths spec.
+ * Build the update payload entry for a dataPaths spec. Accessor specs return
+ * their own payload from `set`.
  *
  * @param {Document} document
- * @param {string|string[]} spec
+ * @param {string|string[]|Object} spec
  * @param {*} value
  * @returns {Object<string, *>}
  */
 export function setPath(document, spec, value) {
+  if (typeof spec?.set === "function") return spec.set(document, value);
   const path = typeof spec === "function" ? null : resolvePath(spec, document);
   if (!path) {
     throw unsupported(document, "data write", "no writable path configured");
@@ -81,7 +86,8 @@ export function setPath(document, spec, value) {
  * Central update executor. When `options.update === false` the raw changes
  * payload is returned synchronously without touching the document (for
  * batch-building); otherwise the changes are applied via the document's
- * update method and its promise is returned.
+ * update method and its promise is returned. An adapter's optional
+ * `afterUpdate(document, changes)` is awaited before the promise resolves.
  *
  * @param {Document} document
  * @param {Object<string, *>} changes
@@ -92,7 +98,12 @@ export function setPath(document, spec, value) {
 export function executeUpdate(document, changes, options = {}) {
   if (options.update === false) return changes;
   if (!Object.keys(changes).length) return Promise.resolve(document);
-  return document.update(changes);
+  const afterUpdate = getDataPaths()?.afterUpdate;
+  if (typeof afterUpdate !== "function") return document.update(changes);
+  return document.update(changes).then(async (result) => {
+    await afterUpdate(document, changes);
+    return result;
+  });
 }
 
 /**

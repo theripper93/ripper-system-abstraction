@@ -14,6 +14,16 @@ function numeric(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function writeQuantity(item, compute, operation, options) {
+  const cfg = itemConfig(resolveDataPaths(item));
+  if (!cfg.quantity) throw unsupported(item, operation, "no quantity path");
+  const target = compute(numeric(getPath(item, cfg.quantity)) ?? 0);
+  if (target > 1 && typeof cfg.stackable === "function" && !cfg.stackable(item)) {
+    throw unsupported(item, operation, "item is not stackable");
+  }
+  return executeUpdate(item, setPath(item, cfg.quantity, target), options);
+}
+
 const STATES = {
   equipped: { feature: "supportsEquipment", allowed: "equippable", on: "equippedValue", off: "unequippedValue" },
   attuned: { feature: "supportsAttunement", allowed: "attunable", on: "attunedValue", off: "unattunedValue" },
@@ -83,9 +93,7 @@ export const item = {
    * @returns {Promise<Item|Object<string,*>>}
    */
   setQuantity(item, quantity, options = {}) {
-    const spec = itemConfig(resolveDataPaths(item)).quantity;
-    if (!spec) throw unsupported(item, "item.setQuantity", "no quantity path");
-    return executeUpdate(item, setPath(item, spec, quantity), options);
+    return writeQuantity(item, () => quantity, "item.setQuantity", options);
   },
 
   /**
@@ -96,10 +104,7 @@ export const item = {
    * @returns {Promise<Item|Object<string,*>>}
    */
   addQuantity(item, amount, options = {}) {
-    const spec = itemConfig(resolveDataPaths(item)).quantity;
-    if (!spec) throw unsupported(item, "item.addQuantity", "no quantity path");
-    const current = getPath(item, spec) ?? 0;
-    return executeUpdate(item, setPath(item, spec, current + amount), options);
+    return writeQuantity(item, (current) => current + amount, "item.addQuantity", options);
   },
 
   /**
@@ -110,10 +115,20 @@ export const item = {
    * @returns {Promise<Item|Object<string,*>>}
    */
   removeQuantity(item, amount, options = {}) {
-    const spec = itemConfig(resolveDataPaths(item)).quantity;
-    if (!spec) throw unsupported(item, "item.removeQuantity", "no quantity path");
-    const current = getPath(item, spec) ?? 0;
-    return executeUpdate(item, setPath(item, spec, Math.max(0, current - amount)), options);
+    return writeQuantity(item, (current) => Math.max(0, current - amount), "item.removeQuantity", options);
+  },
+
+  /**
+   * Whether the Item can hold a quantity greater than one. Returns null when
+   * the Item has no quantity.
+   *
+   * @param {Item} item
+   * @returns {boolean|null}
+   */
+  isStackable(item) {
+    const cfg = itemConfig(resolveDataPaths(item));
+    if (!cfg.quantity || getPath(item, cfg.quantity) == null) return null;
+    return typeof cfg.stackable === "function" ? !!cfg.stackable(item) : true;
   },
 
   // ---------------------------------------------------------------
@@ -247,7 +262,9 @@ export const item = {
       return maximum != null ? maximum - spent : null;
     }
     const spec = cfg.uses;
-    return spec ? numeric(getPath(item, spec)) : null;
+    if (!spec) return null;
+    if (cfg.maximumUses && !(numeric(getPath(item, cfg.maximumUses)) > 0)) return null;
+    return numeric(getPath(item, spec));
   },
 
   /**

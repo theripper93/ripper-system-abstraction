@@ -32,21 +32,36 @@ export default async function exaltedthird() {
   return {
     dataPaths: {
     actor: {
-      type: "details.exalt",
-      subtype: "details.caste",
+      type: (actor) => (actor.type === "npc" ? actor.system.creaturetype : actor.system.details?.exalt === "mortal" ? "mortal" : "exalt"),
+      typeChoices: () => CONFIG.exaltedthird.selects.creatureTypes,
+      subtype: "details.exalt",
       size: "",
       level: "essence.value",
       role: "",
     },
 
     health: {
-      current: "health.value",
+      current: {
+        get: (actor) => actor.system.health?.value,
+        set: (actor, value) => {
+          const health = actor.system.health;
+          const next = { bashing: health.bashing, lethal: health.lethal, aggravated: health.aggravated };
+          let delta = Math.max(0, health.max - value) - (next.bashing + next.lethal + next.aggravated);
+          if (delta > 0) next.lethal += delta;
+          for (const key of ["bashing", "lethal", "aggravated"]) {
+            const healed = Math.min(next[key], Math.max(0, -delta));
+            next[key] -= healed;
+            delta += healed;
+          }
+          return Object.fromEntries(Object.entries(next).map(([key, amount]) => [`system.health.${key}`, amount]));
+        },
+      },
       maximum: "health.max",
-      temporary: "health.levels.temp.value",
-      minimum: "health.min",
+      temporary: "",
+      minimum: "",
 
-      useWounds: true,
-      wounds: ["health.bashing", "health.lethal", "health.aggravated"],
+      useWounds: false,
+      wounds: "",
       maximumWounds: "",
     },
 
@@ -55,7 +70,7 @@ export default async function exaltedthird() {
       weight: "",
 
       equipped: "equipped",
-      attuned: "attunement",
+      attuned: "",
 
       uses: "",
       maximumUses: "",
@@ -81,15 +96,17 @@ export default async function exaltedthird() {
     },
 
     experience: {
-      current: "experience.standard.remaining",
+      current: {
+        get: (actor) => actor.system.experience?.standard?.remaining,
+        set: (actor, value) => ({ "system.experience.standard.total": actor.system.experience.standard.value + value }),
+      },
       maximum: "",
-      level: "essence.value",
     },
 
     features: {
       supportsHealth: true,
-      supportsTemporaryHealth: true,
-      supportsWounds: true,
+      supportsTemporaryHealth: false,
+      supportsWounds: false,
       supportsCurrency: false,
       supportsWeight: false,
       supportsEquipment: true,
@@ -98,10 +115,17 @@ export default async function exaltedthird() {
     testsInterface: {
     buildInputs: () => {
       const choices = {};
+      const group = {
+        ability: game.i18n.localize("ripper-system-abstraction.tests.Skill"),
+        pool: game.i18n.localize("ripper-system-abstraction.tests.Pool"),
+      };
 
       for (const [key, label] of Object.entries(CONFIG.exaltedthird.selects.abilities)) {
         if (!key) continue;
-        choices[key] = game.i18n.localize(label);
+        choices[`ability.${key}`] = { label: game.i18n.localize(label), group: group.ability };
+      }
+      for (const [key, label] of Object.entries(CONFIG.exaltedthird.npcpools)) {
+        choices[`pool.${key}`] = { label: game.i18n.localize(label), group: group.pool };
       }
 
       class CheckInput extends ExaltedThirdCheckInput {
@@ -128,14 +152,20 @@ export default async function exaltedthird() {
         return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
       }
 
+      const [kind, key] = inputs.check.split(".");
+      const isNpc = actor.type === "npc";
+      if (kind === "pool" && !isNpc) throw new Error(`Exalted characters cannot perform "${key}" pool checks.`);
+      if (kind === "ability" && isNpc) throw new Error(`Exalted NPCs cannot perform "${key}" ability checks; they roll pools.`);
+
       const form = new RollForm(actor, {}, {}, {
         rollType: "ability",
-        ability: inputs.check,
-        attribute: actor.system.abilities[inputs.check]?.prefattribute,
+        ...(isNpc ? { pool: key } : { ability: key, attribute: actor.system.abilities[key]?.prefattribute }),
         difficulty: inputs.difficulty ?? 0,
-        skipDialog: true,
+        skipDialog: !!options.fastForward,
       });
-      await form.roll();
+      if ((await form.roll()) === false) {
+        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      }
 
       const object = form.object;
       const total = object.diceRollTotal;
@@ -148,7 +178,7 @@ export default async function exaltedthird() {
         result: total,
         target: difficulty > 0 ? difficulty : null,
         success,
-        levelOfSuccess: difficulty > 0 ? Math.clamp(50 + (object.thresholdSuccesses ?? 0) * 10, 0, 100) : null,
+        levelOfSuccess: difficulty > 0 ? Math.clamp(50 + (total - difficulty) * 10, 0, 100) : null,
         criticalSuccess: false,
         criticalFailure: botch,
       };

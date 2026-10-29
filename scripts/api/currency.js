@@ -133,7 +133,7 @@ export const currency = {
     return Object.entries(config.denominations ?? {})
       .map(([id, entry]) => ({
         id,
-        label: entry?.label ? game.i18n.localize(entry.label) : id.toUpperCase(),
+        label: entry?.label ? game.i18n.localize(entry.label).replace(/\s*:\s*$/, "") : id.toUpperCase(),
         icon: entry?.icon ?? null,
         value: denominationRatio(config, id),
         isBase: id === config.base,
@@ -230,7 +230,7 @@ export const currency = {
     const itemConfig = config.item ?? {};
     if (itemConfig.single?.value) {
       const value = amountOf(getPath(item, itemConfig.single.value));
-      if (value == null || value === "") return {};
+      if (typeof value !== "number") return {};
       const denomination = itemConfig.single.denomination
         ? (getPath(item, itemConfig.single.denomination) || config.base || "")
         : (config.base ?? "");

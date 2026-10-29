@@ -12,6 +12,14 @@ export default async function gurps() {
     PER: "GURPS.attributesPERNAME",
   };
 
+  const usesField = (key) => ({
+    get: (item) => {
+      const value = item.system.eqt?.[key];
+      return value === "" || value == null || !Number.isFinite(Number(value)) ? null : Number(value);
+    },
+    set: (item, value) => ({ [`system.eqt.${key}`]: String(value) }),
+  });
+
   class GURPSCheckInput extends DataModel {
     static defineSchema() {
       return {
@@ -42,7 +50,8 @@ export default async function gurps() {
     actor: {
       type: "",
       subtype: "",
-      size: "traits.sizemod",
+      size: (actor) => Number(actor.system.traits?.sizemod) || 0,
+      sizes: { 2: 2, 3: 3, 4: 5, 5: 7, 6: 10 },
       level: "",
       role: "",
     },
@@ -62,11 +71,14 @@ export default async function gurps() {
       quantity: "eqt.count",
       weight: "eqt.weight",
 
-      equipped: "eqt.equipped",
+      equipped: {
+        get: (item) => item.system.eqt?.equipped,
+        set: (item, value) => ({ "system.equipped": value, "system.eqt.equipped": value }),
+      },
       attuned: "",
 
-      uses: "eqt.uses",
-      maximumUses: "eqt.maxuses",
+      uses: usesField("uses"),
+      maximumUses: usesField("maxuses"),
     },
 
     currency: {
@@ -93,7 +105,6 @@ export default async function gurps() {
     experience: {
       current: "totalpoints.unspent",
       maximum: "",
-      level: "",
     },
 
     features: {
@@ -103,6 +114,12 @@ export default async function gurps() {
       supportsCurrency: false,
       supportsWeight: true,
       supportsEquipment: true,
+    },
+
+    afterUpdate: async (document) => {
+      const actor = document.parent;
+      if (document.documentName !== "Item" || document.type !== "equipment" || !actor?._findEqtkeyForId?.("itemid", document.id)) return;
+      await actor._updateItemFromForm(document);
     },
     },
     testsInterface: {

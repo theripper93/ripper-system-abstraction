@@ -1,6 +1,6 @@
 import { api } from "./api/index.js";
 import { serialize, buildInputs, processCheck } from "./testsInterfaceCustomElement.js";
-import { resolveDataPaths } from "./api/core.js";
+import { resolveDataPaths, resolvePath } from "./api/core.js";
 
 /*
  * Live test runner for the agnostic API.
@@ -54,16 +54,16 @@ function pickItem(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
+function fieldChoices(field) {
+  if (!(field instanceof foundry.data.fields.StringField)) return null;
+  let choices = field.options?.choices ?? field.choices;
+  if (typeof choices === "function") choices = choices();
+  if (!choices || typeof choices !== "object") return null;
+  return Array.isArray(choices) ? choices : Object.keys(choices);
+}
+
 function sampleFieldValue(field) {
-  if (field instanceof foundry.data.fields.StringField) {
-    let choices = field.options?.choices ?? field.choices;
-    if (typeof choices === "function") choices = choices();
-    if (choices && typeof choices === "object") {
-      const keys = Array.isArray(choices) ? choices : Object.keys(choices);
-      return keys[0];
-    }
-    return "1d20+5";
-  }
+  if (field instanceof foundry.data.fields.StringField) return fieldChoices(field)?.[0] ?? "1d20+5";
   if (field instanceof foundry.data.fields.NumberField) {
     return typeof field.options.min === "number" ? field.options.min : 10;
   }
@@ -76,8 +76,9 @@ function sampleFieldValue(field) {
 /* ------------------------------------------------------------------------- */
 
 async function testData(actor) {
-  const testPath = api.health.getCurrent(actor) != null
-    ? resolveDataPaths(actor)?.health?.current
+  const spec = resolveDataPaths(actor)?.health?.current;
+  const testPath = api.health.getCurrent(actor) != null && (typeof spec === "string" || Array.isArray(spec))
+    ? resolvePath(spec, actor)
     : null;
 
   if (testPath) {
@@ -255,6 +256,13 @@ async function testCurrencyActor(actor) {
   }
   pass("currency.get", JSON.stringify(got));
 
+  const denominations = api.currency.getDenominations();
+  if (denominations.length && denominations.every((d) => typeof d.label === "string" && d.value > 0)) {
+    pass("currency.getDenominations", denominations.map((d) => `${d.id}=${d.label}`).join(", "));
+  } else {
+    fail("currency.getDenominations", JSON.stringify(denominations));
+  }
+
   const beforeTotal = api.currency.getTotal(actor);
   if (typeof beforeTotal === "number") {
     pass("currency.getTotal", `total ${round(beforeTotal)} ${base}`);
@@ -304,7 +312,7 @@ async function testCurrencyActor(actor) {
   const ordered = Object.keys(api.currency.get(actor))
     .filter((d) => config.denominations?.[d])
     .sort((a, b) => config.denominations[a].value - config.denominations[b].value);
-  if (ordered.length >= 2 && !config.actor?.handler) {
+  if (ordered.length >= 2) {
     const [low, high] = ordered;
     const ratio = config.denominations[high].value / config.denominations[low].value;
     await api.currency.set(actor, Object.fromEntries(ordered.map((d) => [d, d === high ? 2 : 0])));
@@ -325,7 +333,7 @@ async function testCurrencyActor(actor) {
       pass("currency.remove insufficient", "throws");
     }
   } else {
-    skip("currency.remove multi + change", "needs two path-based denominations");
+    skip("currency.remove multi + change", "needs two denominations");
   }
 }
 
@@ -399,10 +407,11 @@ async function testItemQuantity(item) {
   }
 
   await api.item.removeQuantity(item, 1000);
-  if (api.item.getQuantity(item) === 0) {
-    pass("item.removeQuantity clamps", "quantity 0");
+  const floor = api.item.getQuantity(item);
+  if (floor === 0 || floor === 1) {
+    pass("item.removeQuantity clamps", `quantity ${floor}${floor ? " (system minimum)" : ""}`);
   } else {
-    fail("item.removeQuantity clamps", `expected 0, got ${api.item.getQuantity(item)}`);
+    fail("item.removeQuantity clamps", `expected 0 (or the system minimum), got ${floor}`);
   }
 }
 
@@ -591,6 +600,7 @@ async function testTestsInterface(actor) {
   pass("tests.buildInputs", `inputs: ${Object.keys(inputClasses).join(", ")}`);
 
   const inputs = {};
+  let variants = null;
   for (const [key, model] of Object.entries(inputClasses)) {
     const fields = model.schema?.fields ?? {};
     const names = Object.keys(fields);
@@ -599,6 +609,8 @@ async function testTestsInterface(actor) {
       data[name] = sampleFieldValue(fields[name]);
     }
     inputs[key] = names.length === 1 ? data.value : data;
+    const choices = names.length === 1 ? fieldChoices(fields.value) : null;
+    if (!variants && choices?.length > 1) variants = { key, choices };
   }
 
   let value;
@@ -610,12 +622,17 @@ async function testTestsInterface(actor) {
   }
 
   let result;
-  try {
-    result = await processCheck(actor, value, { fastForward: true });
-  } catch (err) {
-    if (/cannot perform checks/i.test(err.message)) skip("tests.processCheck", err.message);
-    else fail("tests.processCheck", `fastForward check failed: ${err.message}`);
-    return;
+  for (const choice of variants?.choices ?? [inputs[variants?.key]]) {
+    if (variants) value = serialize({ ...inputs, [variants.key]: choice });
+    try {
+      result = await processCheck(actor, value, { fastForward: true });
+      break;
+    } catch (err) {
+      if (/cannot perform/i.test(err.message) && choice !== variants?.choices.at(-1)) continue;
+      if (/cannot perform/i.test(err.message)) skip("tests.processCheck", err.message);
+      else fail("tests.processCheck", `fastForward check failed: ${err.message}`);
+      return;
+    }
   }
 
   const required = ["canceled", "result", "target", "success", "levelOfSuccess", "criticalSuccess", "criticalFailure"];
@@ -658,7 +675,7 @@ export async function runAPITests(actor) {
   const items = actor.items?.contents ?? [];
   pass("setup", `items available: ${items.length}`);
 
-  const quantityItem = pickItem(items.filter((i) => api.item.getQuantity(i) != null));
+  const quantityItem = pickItem(items.filter((i) => api.item.isStackable(i) === true));
   const usesItem = pickItem(items.filter((i) => api.item.getUses(i) != null && api.item.getMaximumUses(i) != null));
   const equipmentItem = items.find((i) => api.item.isEquipped(i) != null) ?? null;
   const attunementItem = items.find((i) => api.item.isAttuned(i) != null) ?? null;
