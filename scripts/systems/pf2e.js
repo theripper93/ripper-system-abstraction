@@ -97,8 +97,18 @@ export default async function pf2e() {
             const coins = actor.inventory?.currency;
             return coins ? { cp: coins.cp, sp: coins.sp, gp: coins.gp, pp: coins.pp } : {};
           },
-          add: (actor, amounts) => actor.inventory.addCurrency(amounts, { combineStacks: true }),
-          remove: (actor, amounts) => actor.inventory.removeCurrency(amounts, { byValue: true }),
+          set: async (actor, amounts) => {
+            const coins = actor.inventory.currency;
+            const add = {};
+            const remove = {};
+            for (const [name, target] of Object.entries(amounts)) {
+              const delta = target - (coins[name] ?? 0);
+              if (delta > 0) add[name] = delta;
+              else if (delta < 0) remove[name] = -delta;
+            }
+            if (Object.keys(remove).length) await actor.inventory.removeCurrency(remove, { byValue: false });
+            if (Object.keys(add).length) await actor.inventory.addCurrency(add, { combineStacks: true });
+          },
         },
       },
 

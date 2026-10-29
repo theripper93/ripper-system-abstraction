@@ -53,7 +53,9 @@ export default async function alienrpg() {
       quantity: "attributes.quantity.value",
       weight: "attributes.weight.value",
 
-      equipped: "",
+      equipped: "header.active",
+      equippedValue: "true",
+      unequippedValue: "false",
       attuned: "",
 
       uses: "attributes.rounds.value",
@@ -61,37 +63,40 @@ export default async function alienrpg() {
     },
 
     currency: {
-      base: "",
+      base: "usd",
 
       actor: {
-        denominations: {},
+        denominations: {
+          usd: "general.cash.value",
+        },
       },
 
       item: {
         single: {
-          value: "",
+          value: "attributes.cost.value",
           denomination: "",
         },
 
         denominations: {},
       },
 
-      denominations: {},
+      denominations: {
+        usd: { value: 1 },
+      },
     },
 
     experience: {
       current: "general.xp.value",
       maximum: "general.xp.max",
-      level: "",
     },
 
     features: {
       supportsHealth: true,
       supportsTemporaryHealth: false,
       supportsWounds: true,
-      supportsCurrency: false,
+      supportsCurrency: true,
       supportsWeight: true,
-      supportsEquipment: false,
+      supportsEquipment: true,
     },
     },
     testsInterface: {
@@ -131,9 +136,12 @@ export default async function alienrpg() {
     processCheck: async (actor, inputs, options = {}) => {
       const [type, key] = inputs.check.split(".");
       const dataset = { modifier: inputs.modifier ?? 0, stressMod: 0 };
+      if (!["character", "synthetic"].includes(actor.type)) {
+        throw new Error(`Alien RPG actors of type "${actor.type}" cannot perform checks.`);
+      }
 
       if (type === "attribute") {
-        const attribute = actor.system.attributes[key];
+        const attribute = actor.system.attributes?.[key];
         if (!attribute) throw new Error(`Unknown Alien RPG attribute: ${key}`);
 
         dataset.label = game.i18n.localize(`ALIENRPG.Ability${key.capitalize()}`);
@@ -141,7 +149,7 @@ export default async function alienrpg() {
         dataset.mod = attribute.mod;
         dataset.attr = "attribute";
       } else if (type === "skill") {
-        const skill = actor.system.skills[key];
+        const skill = actor.system.skills?.[key];
         if (!skill) throw new Error(`Unknown Alien RPG skill: ${key}`);
 
         dataset.label = game.i18n.localize(`ALIENRPG.Skill${key}`);
@@ -150,17 +158,29 @@ export default async function alienrpg() {
         throw new Error(`Unsupported Alien RPG check type: ${type}`);
       }
 
-      const result = actor.abilityRoll(actor, dataset, options.fastForward ?? true);
-      if (result === "cancelled") {
-        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      const canceled = { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      const suppressed = options.suppressedMessages;
+      const suppressedBefore = suppressed?.length ?? 0;
+      let posted = null;
+      const hookId = Hooks.on("createChatMessage", (message) => {
+        if (message.author?.id === game.user.id) posted = message;
+      });
+
+      try {
+        const response = await actor.abilityRoll(actor, dataset, options.fastForward ?? false);
+        if (response === "cancelled") return canceled;
+        for (let i = 0; i < 60 && !posted && !(suppressed?.length > suppressedBefore); i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      } finally {
+        Hooks.off("createChatMessage", hookId);
+      }
+
+      if (!posted && !(suppressed?.length > suppressedBefore)) {
+        throw new Error(`Alien RPG: ${actor.name} has no dice to roll for ${inputs.check}.`);
       }
 
       const rollArr = game.alienrpg.rollArr;
-      for (let i = 0; i < 40; i++) {
-        if (rollArr.r1Dice > 0 || rollArr.r2Dice > 0) break;
-        await new Promise((r) => setTimeout(r, 50));
-      }
-
       const sixes = (rollArr.r1Six ?? 0) + (rollArr.r2Six ?? 0);
       const pool = (rollArr.r1Dice ?? 0) + (rollArr.r2Dice ?? 0);
 

@@ -175,17 +175,17 @@
  *
  * Systems that store actor currency in a non-path-based form (e.g. as items,
  * like PF2E's treasure items) may provide an optional `handler` instead. The
- * handler replaces path-based actor currency entirely: `get(actor)` returns a
- * normalized denomination object, `add(actor, amounts)` and
- * `remove(actor, amounts)` apply deltas (remove returning false when funds are
- * insufficient). `currency.set` is derived generically from get/add/remove.
+ * handler replaces path-based actor currency entirely: `get(actor)` returns the
+ * amount of every supported denomination (0 when the actor has none), and
+ * `set(actor, amounts)` writes the given absolute amounts (only changed
+ * denominations are passed). Adding, removing and change-making are computed
+ * generically from get/set.
  *
  *   actor: {
  *     denominations: { cp: "", sp: "", gp: "", pp: "" },
  *     handler: {
  *       get: (actor) => ({ cp: 0, sp: 0, gp: 0, pp: 0 }),
- *       add: async (actor, amounts) => {},
- *       remove: async (actor, amounts) => true,
+ *       set: async (actor, amounts) => {},
  *     },
  *   }
  *
@@ -356,7 +356,9 @@ export default async function systemAdapter() {
     //   pp: { value: 10 }
     //
     // Add `change: false` to a denomination that may be spent but should
-    // never be handed out as change (e.g. dnd5e electrum).
+    // never be handed out as change (e.g. dnd5e electrum). Optional `label`
+    // (i18n key or text) and `icon` (image path) are exposed through
+    // `currency.getDenominations()`.
     denominations: {},
   },
 
@@ -432,6 +434,12 @@ export default async function systemAdapter() {
 //
 // The options object is forwarded to the system's check method when that
 // method accepts an options argument.
+//
+// When `silent` is set, the generic layer blocks chat messages created by the
+// current user while the check runs, and
+// collects the blocked ChatMessage documents in `options.suppressedMessages`.
+// Systems whose check methods return the created chat message (which is then
+// undefined) should read the rolls from `options.suppressedMessages.at(-1)`.
 //
 // The returned value is a standardized result object:
 //

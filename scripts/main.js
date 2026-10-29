@@ -16,6 +16,10 @@ export const API = {
         parse,
         processCheck,
     },
+    debug: {
+        openDialog: openTestsDebugDialog,
+        runAPITests,
+    },
 };
 
 Hooks.on("init", () => {
@@ -28,7 +32,6 @@ Hooks.on("ready", async () => {
     showWelcome();
     initConfig();
     await loadSystem();
-    openTestsDebugDialog();
 });
 
 async function openTestsDebugDialog() {

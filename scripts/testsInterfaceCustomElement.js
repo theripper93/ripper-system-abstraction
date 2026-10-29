@@ -107,10 +107,12 @@ export async function processCheck(actor, value, options = {}) {
   const iface = getTestsInterface();
   if (!options.silent) return iface.processCheck(actor, inputs, options);
 
-  const actorIds = new Set([actor.uuid, actor.id].filter(Boolean));
+  const suppressedMessages = [];
+  options = { ...options, suppressedMessages };
   const hook = (message) => {
-    const speaker = message?.speaker?.actor;
-    if (speaker && actorIds.has(speaker)) return false;
+    if ((message.author?.id ?? message.author) !== game.user.id) return;
+    suppressedMessages.push(message);
+    return false;
   };
   Hooks.on("preCreateChatMessage", hook);
   try {

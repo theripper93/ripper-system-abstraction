@@ -17,6 +17,35 @@ export default async function anarchy() {
 
   const ANARCHY_ATTRIBUTES = ["strength", "agility", "willpower", "logic", "charisma", "edge"];
 
+  async function rollDirect(anarchy, payload, options) {
+    payload.parameters = anarchy.rollParameters.build(payload);
+    const manager = anarchy.rollManager;
+    if (options.silent) manager._displayRollInChat = async () => {};
+    try {
+      await manager.roll(payload);
+    } finally {
+      if (options.silent) delete manager._displayRollInChat;
+    }
+    return payload;
+  }
+
+  async function rollWithDialog(actor, type, key, payload) {
+    let dialogRoll = null;
+    let closed = false;
+    const renderHook = Hooks.on("renderRollDialog", (app) => { dialogRoll ??= app.roll; });
+    const closeHook = Hooks.on("closeRollDialog", () => { closed = true; });
+    try {
+      if (type === "attribute") await actor.rollAttribute(key);
+      else await actor.rollSkill(payload.skill);
+      while (!closed) await new Promise((r) => setTimeout(r, 100));
+      for (let i = 0; i < 30 && !dialogRoll?.roll; i++) await new Promise((r) => setTimeout(r, 100));
+    } finally {
+      Hooks.off("renderRollDialog", renderHook);
+      Hooks.off("closeRollDialog", closeHook);
+    }
+    return dialogRoll;
+  }
+
   return {
     dataPaths: {
     actor: {
@@ -44,7 +73,9 @@ export default async function anarchy() {
       quantity: "",
       weight: "",
 
-      equipped: "",
+      equipped: "inactive",
+      equippedValue: false,
+      unequippedValue: true,
       attuned: "",
 
       uses: "",
@@ -73,7 +104,14 @@ export default async function anarchy() {
     experience: {
       current: "counters.karma.value",
       maximum: "",
-      level: "",
+    },
+
+    overrides: {
+      Actor: {
+        vehicle: {
+          health: { current: "monitors.structure.value", maximum: "monitors.structure.max" },
+        },
+      },
     },
 
     features: {
@@ -82,7 +120,7 @@ export default async function anarchy() {
       supportsWounds: false,
       supportsCurrency: false,
       supportsWeight: false,
-      supportsEquipment: false,
+      supportsEquipment: true,
     },
     },
     testsInterface: {
@@ -121,52 +159,51 @@ export default async function anarchy() {
 
     processCheck: async (actor, inputs, options = {}) => {
       const anarchy = game.system.anarchy;
-      if (!anarchy?.rollManager) {
-        return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      const [type, key] = inputs.check.split(".");
+      if (!actor.getUsableAttributes) {
+        throw new Error(`Anarchy actors of type "${actor.type}" cannot perform checks.`);
       }
 
-      const [type, key] = inputs.check.split(":");
       const payload = {
         actor,
         tokenId: actor.token?.id,
-        attributes: actor.getUsableAttributes?.() ?? {},
+        attributes: actor.getUsableAttributes(),
         options: { canUseEdge: actor.canUseEdge?.() ?? false },
-        ANARCHY: CONFIG.ANARCHY,
         event: options.event,
       };
 
       if (type === "attribute") {
+        if (!payload.attributes.includes(key)) {
+          throw new Error(`Anarchy actors of type "${actor.type}" cannot perform checks with ${key}.`);
+        }
         payload.mode = "attribute";
         payload.attribute1 = key;
       } else if (type === "skill") {
-        const item = actor.items.find((i) => i.type === "skill" && (i.system.code === key || i.name === key));
-        if (!item) {
-          return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
-        }
-
+        const skill = actor.items.find((i) => i.type === "skill" && i.system.code === key);
+        if (!skill) throw new Error(`${actor.name} does not have the Anarchy skill "${key}".`);
         payload.mode = "skill";
-        payload.skill = item;
-        payload.attribute1 = item.system.attribute ?? "agility";
+        payload.skill = skill;
+        payload.attribute1 = skill.system.attribute ?? "agility";
       } else {
         throw new Error(`Unsupported Anarchy check type: ${type}`);
       }
 
-      await anarchy.rollParameters.build(payload);
-      await anarchy.rollManager.roll(payload);
+      const rolled = options.fastForward ? await rollDirect(anarchy, payload, options) : await rollWithDialog(actor, type, key, payload);
+      if (!rolled?.roll) {
+        return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
+      }
 
-      const roll = payload.roll;
-      const hits = roll?.total ?? 0;
-      const pool = payload.param?.pool ?? 0;
-      const glitch = roll?.glitchOutcome === "glitch";
-
+      const roll = rolled.roll;
+      const hits = roll.total ?? 0;
+      const pool = rolled.param?.pool ?? 0;
       return {
         canceled: false,
         result: hits,
-        target: 5,
+        target: null,
         success: hits > 0,
         levelOfSuccess: pool > 0 ? Math.clamp(Math.round((hits / pool) * 100), 0, 100) : 0,
-        criticalSuccess: false,
-        criticalFailure: glitch,
+        criticalSuccess: (roll.riskProwess ?? 0) > 0,
+        criticalFailure: (roll.totalGlitch ?? 0) > 0,
       };
     },
     },

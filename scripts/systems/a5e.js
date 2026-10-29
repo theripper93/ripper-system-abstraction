@@ -56,9 +56,11 @@ export default async function a5e() {
   return {
     dataPaths: {
     actor: {
-      type: "",
-      subtype: "details.creatureTypes",
+      type: "details.creatureTypes",
+      typeChoices: () => CONFIG.A5E.creatureTypes,
+      subtype: "",
       size: "traits.size",
+      sizes: () => CONFIG.A5E.tokenDimensions,
       level: "details.level",
       role: "",
     },
@@ -82,6 +84,7 @@ export default async function a5e() {
       equippedValue: 2,
       unequippedValue: 0,
       attuned: "attuned",
+      attunable: (item) => item.system.requiresAttunement === true,
 
       uses: "uses.value",
       maximumUses: "uses.max",
@@ -97,6 +100,7 @@ export default async function a5e() {
           ep: "currency.ep",
           gp: "currency.gp",
           pp: "currency.pp",
+          cr: "currency.cr",
         },
       },
 
@@ -109,19 +113,25 @@ export default async function a5e() {
         denominations: {},
       },
 
-      denominations: {
-        cp: { value: 0.01 },
-        sp: { value: 0.1 },
-        ep: { value: 0.5 },
-        gp: { value: 1 },
-        pp: { value: 10 },
-      },
+      denominations: Object.fromEntries(Object.entries(CONFIG.A5E.currencyDenominations).map(([key, label]) => [key, {
+        value: CONFIG.A5E.currencyToCopper[key](1) / 100,
+        label,
+        change: !["ep", "cr"].includes(key),
+      }])),
     },
 
     experience: {
       current: "details.xp",
       maximum: "",
-      level: "details.level",
+    },
+
+    overrides: {
+      Actor: {
+        npc: {
+          actor: { level: "details.cr" },
+          experience: { current: "" },
+        },
+      },
     },
 
     features: {
@@ -131,6 +141,7 @@ export default async function a5e() {
       supportsCurrency: true,
       supportsWeight: true,
       supportsEquipment: true,
+      supportsAttunement: true,
     },
     },
     testsInterface: {
@@ -178,6 +189,10 @@ export default async function a5e() {
         event: options.event,
       };
 
+      if (!actor.system.abilities) {
+        throw new Error(`A5E actors of type "${actor.type}" cannot perform checks.`);
+      }
+
       let message;
       switch (type) {
         case "skill":
@@ -203,7 +218,7 @@ export default async function a5e() {
           throw new Error(`Unsupported A5E check type: ${type}`);
       }
 
-      return normalizeRoll(message, inputs.dc);
+      return normalizeRoll(message ?? options.suppressedMessages?.at(-1), inputs.dc);
     },
     },
   };

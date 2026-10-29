@@ -31,7 +31,8 @@ function stateSpec(item, dp, key) {
  * Interpret a toggle state (equipped/attuned) of an item. Boolean paths need
  * no metadata; numeric and string enum paths use the optional
  * `equippedValue`/`attunedValue` hints declared on the adapter. A numeric
- * hint is an inclusive threshold; a string is matched exactly.
+ * hint is an inclusive threshold; a string or boolean is matched exactly
+ * (a boolean hint allows inverted flags such as `inactive: false`).
  */
 function readState(item, key) {
   const dp = resolveDataPaths(item);
@@ -39,7 +40,7 @@ function readState(item, key) {
   if (!spec) return null;
   const current = getPath(item, spec);
   const hint = itemConfig(dp)[STATES[key].on];
-  if (typeof current === "boolean") return current;
+  if (typeof current === "boolean") return typeof hint === "boolean" ? current === hint : current;
   if (typeof current === "number") return current >= (typeof hint === "number" ? hint : 1);
   return current === (typeof hint === "string" ? hint : key);
 }

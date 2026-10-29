@@ -124,12 +124,12 @@ export const health = {
     if (isWoundMapped(dp)) {
       const maximum = numeric(maximumWoundsValue(actor, dp));
       const wounds = numeric(woundsValue(actor, dp));
-      if (maximum == null || wounds == null) return null;
+      if (!(maximum > 0) || wounds == null) return null;
       return Math.clamp((maximum - wounds) / maximum, 0, 1);
     }
     const maximum = numeric(maximumValue(actor, dp));
     const total = effectiveCurrent(actor, dp);
-    if (maximum == null || total == null) return null;
+    if (!(maximum > 0) || total == null) return null;
     return Math.clamp((total + effectiveTemporary(actor, dp)) / maximum, 0, 1);
   },
 

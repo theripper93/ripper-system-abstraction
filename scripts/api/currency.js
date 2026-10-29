@@ -18,6 +18,11 @@ function actorPaths(config) {
   return config.actor?.denominations ?? {};
 }
 
+function amountOf(value) {
+  if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) return Number(value);
+  return value;
+}
+
 function denominationRatio(config, name) {
   const entry = config.denominations?.[name];
   return typeof entry?.value === "number" ? entry.value : 1;
@@ -36,19 +41,10 @@ function readWallet(actor, config) {
   if (handler) return handler.get(actor) ?? {};
   const wallet = {};
   for (const [name, path] of Object.entries(actorPaths(config))) {
-    if (path) wallet[name] = getPath(actor, path) ?? 0;
+    const amount = path ? getPath(actor, path) : undefined;
+    if (amount !== undefined) wallet[name] = amountOf(amount) ?? 0;
   }
   return wallet;
-}
-
-function writeWallet(actor, config, amounts, operation, options) {
-  const paths = actorPaths(config);
-  const changes = {};
-  for (const [name, amount] of Object.entries(amounts)) {
-    if (!paths[name]) throw unsupported(actor, operation, `actor does not support denomination "${name}"`);
-    Object.assign(changes, setPath(actor, paths[name], amount));
-  }
-  return executeUpdate(actor, changes, options);
 }
 
 function assertDenominations(actor, wallet, currency, operation) {
@@ -57,35 +53,22 @@ function assertDenominations(actor, wallet, currency, operation) {
   }
 }
 
-function assertCanUpdate(actor, options, operation) {
-  if (options.update === false) throw unsupported(actor, operation, "update: false is not available for handler-based currency");
-}
-
-async function handlerSet(actor, handler, wallet, currency) {
-  for (const [name, target] of Object.entries(currency)) {
-    const delta = target - (wallet[name] ?? 0);
-    if (delta > 0) await handler.add(actor, { [name]: delta });
-    else if (delta < 0) await handler.remove(actor, { [name]: -delta });
+/**
+ * Persist a new wallet state. Path-based wallets write only the changed
+ * denominations (honouring `update: false`); handler-based wallets receive
+ * the changed absolute amounts through `handler.set`.
+ */
+function commit(actor, config, before, after, operation, options) {
+  const changed = Object.fromEntries(Object.entries(after).filter(([name, amount]) => amount !== before[name]));
+  const handler = actorHandler(config);
+  if (handler) {
+    if (options.update === false) throw unsupported(actor, operation, "update: false is not available for handler-based currency");
+    return Promise.resolve(handler.set(actor, changed)).then(() => actor);
   }
-  return actor;
-}
-
-async function handlerAdd(actor, handler, currency) {
-  await handler.add(actor, currency);
-  return actor;
-}
-
-async function handlerRemove(actor, handler, currency) {
-  for (const [name, amount] of Object.entries(currency)) {
-    if (amount > 0 && !(await handler.remove(actor, { [name]: amount }))) {
-      throw unsupported(actor, "currency.remove", `insufficient funds to remove ${name}`);
-    }
-  }
-  return actor;
-}
-
-function changedEntries(before, after) {
-  return Object.fromEntries(Object.entries(after).filter(([name, amount]) => amount !== before[name]));
+  const paths = actorPaths(config);
+  const changes = {};
+  for (const [name, amount] of Object.entries(changed)) Object.assign(changes, setPath(actor, paths[name], amount));
+  return executeUpdate(actor, changes, options);
 }
 
 /**
@@ -139,6 +122,26 @@ function withdraw(config, wallet, request) {
  */
 export const currency = {
   /**
+   * Every denomination the system declares, ordered from lowest to highest
+   * value. `value` is the worth of one unit expressed in the base
+   * denomination.
+   *
+   * @returns {{id: string, label: string, icon: string|null, value: number, isBase: boolean}[]}
+   */
+  getDenominations() {
+    const config = currencyConfig(resolveDataPaths());
+    return Object.entries(config.denominations ?? {})
+      .map(([id, entry]) => ({
+        id,
+        label: entry?.label ? game.i18n.localize(entry.label) : id.toUpperCase(),
+        icon: entry?.icon ?? null,
+        value: denominationRatio(config, id),
+        isBase: id === config.base,
+      }))
+      .sort((a, b) => a.value - b.value);
+  },
+
+  /**
    * The Actor's currency as a normalized denomination object.
    *
    * @param {Actor} actor
@@ -172,13 +175,9 @@ export const currency = {
    */
   set(actor, currency = {}, options = {}) {
     const config = currencyConfig(resolveDataPaths(actor));
-    const handler = actorHandler(config);
-    if (!handler) return writeWallet(actor, config, currency, "currency.set", options);
-
-    assertCanUpdate(actor, options, "currency.set");
     const wallet = readWallet(actor, config);
     assertDenominations(actor, wallet, currency, "currency.set");
-    return handlerSet(actor, handler, wallet, currency);
+    return commit(actor, config, wallet, { ...wallet, ...currency }, "currency.set", options);
   },
 
   /**
@@ -194,14 +193,9 @@ export const currency = {
     const config = currencyConfig(resolveDataPaths(actor));
     const wallet = readWallet(actor, config);
     assertDenominations(actor, wallet, currency, "currency.add");
-    const handler = actorHandler(config);
-    if (handler) {
-      assertCanUpdate(actor, options, "currency.add");
-      return handlerAdd(actor, handler, currency);
-    }
-    const next = {};
-    for (const [name, amount] of Object.entries(currency)) next[name] = wallet[name] + amount;
-    return writeWallet(actor, config, next, "currency.add", options);
+    const next = { ...wallet };
+    for (const [name, amount] of Object.entries(currency)) next[name] += amount;
+    return commit(actor, config, wallet, next, "currency.add", options);
   },
 
   /**
@@ -220,17 +214,9 @@ export const currency = {
     const config = currencyConfig(resolveDataPaths(actor));
     const wallet = readWallet(actor, config);
     assertDenominations(actor, wallet, currency, "currency.remove");
-    const handler = actorHandler(config);
-    if (handler) {
-      assertCanUpdate(actor, options, "currency.remove");
-      if (toBase(config, currency) > toBase(config, wallet)) {
-        throw unsupported(actor, "currency.remove", "insufficient funds");
-      }
-      return handlerRemove(actor, handler, currency);
-    }
     const next = withdraw(config, wallet, currency);
     if (!next) throw unsupported(actor, "currency.remove", "insufficient funds");
-    return writeWallet(actor, config, changedEntries(wallet, next), "currency.remove", options);
+    return commit(actor, config, wallet, next, "currency.remove", options);
   },
 
   /**
@@ -243,8 +229,8 @@ export const currency = {
     const config = currencyConfig(resolveDataPaths(item));
     const itemConfig = config.item ?? {};
     if (itemConfig.single?.value) {
-      const value = getPath(item, itemConfig.single.value);
-      if (value == null) return {};
+      const value = amountOf(getPath(item, itemConfig.single.value));
+      if (value == null || value === "") return {};
       const denomination = itemConfig.single.denomination
         ? (getPath(item, itemConfig.single.denomination) || config.base || "")
         : (config.base ?? "");
@@ -253,7 +239,7 @@ export const currency = {
 
     const result = {};
     for (const [name, path] of Object.entries(itemConfig.denominations ?? {})) {
-      if (path) result[name] = getPath(item, path) ?? 0;
+      if (path) result[name] = amountOf(getPath(item, path)) ?? 0;
     }
     return result;
   },

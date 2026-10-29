@@ -119,13 +119,12 @@ export default async function dnd5e() {
         denominations: {},
       },
 
-      denominations: {
-        cp: { value: 0.01 },
-        sp: { value: 0.1 },
-        ep: { value: 0.5, change: false },
-        gp: { value: 1 },
-        pp: { value: 10 },
-      },
+      denominations: Object.fromEntries(Object.entries(CONFIG.DND5E.currencies).map(([key, entry]) => [key, {
+        value: 1 / entry.conversion,
+        label: entry.label,
+        icon: entry.icon ?? null,
+        change: key !== "ep",
+      }])),
     },
 
     experience: {

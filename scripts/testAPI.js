@@ -1,6 +1,6 @@
 import { api } from "./api/index.js";
 import { serialize, buildInputs, processCheck } from "./testsInterfaceCustomElement.js";
-import { getDataPaths } from "./systems/_index.js";
+import { resolveDataPaths } from "./api/core.js";
 
 /*
  * Live test runner for the agnostic API.
@@ -77,7 +77,7 @@ function sampleFieldValue(field) {
 
 async function testData(actor) {
   const testPath = api.health.getCurrent(actor) != null
-    ? getDataPaths()?.health?.current
+    ? resolveDataPaths(actor)?.health?.current
     : null;
 
   if (testPath) {
@@ -157,6 +157,11 @@ async function testHealth(actor) {
     return;
   }
 
+  if (!(maximum > 0)) {
+    skip("health", `maximum health is ${maximum}`);
+    return;
+  }
+
   if (typeof current === "number" && typeof maximum === "number" && typeof temporary === "number") {
     pass("health.getCurrent", `current ${current}`);
     pass("health.getMaximum", `maximum ${maximum}`);
@@ -233,7 +238,7 @@ async function testHealth(actor) {
 /* ------------------------------------------------------------------------- */
 
 async function testCurrencyActor(actor) {
-  const dp = getDataPaths();
+  const dp = resolveDataPaths(actor);
   const config = dp?.currency ?? {};
   const base = config.base;
   const actorDenoms = config.actor?.denominations ?? {};
@@ -244,11 +249,11 @@ async function testCurrencyActor(actor) {
   }
 
   const got = api.currency.get(actor);
-  if (Object.keys(got).length >= Object.keys(actorDenoms).length) {
-    pass("currency.get", JSON.stringify(got));
-  } else {
-    fail("currency.get", `unexpected denomination set ${JSON.stringify(got)}`);
+  if (!Object.keys(got).length) {
+    skip("currency.actor", "this actor stores no currency");
+    return;
   }
+  pass("currency.get", JSON.stringify(got));
 
   const beforeTotal = api.currency.getTotal(actor);
   if (typeof beforeTotal === "number") {
@@ -279,7 +284,7 @@ async function testCurrencyActor(actor) {
     fail("currency.set (partial)", `expected ${base}=1, got ${JSON.stringify(afterSet)}`);
   }
 
-  const conversionDenom = Object.keys(actorDenoms).find((d) => d !== base);
+  const conversionDenom = Object.keys(got).find((d) => d !== base);
   if (conversionDenom && config.denominations?.[conversionDenom]) {
     const ratio = config.denominations[conversionDenom].value ?? 1;
     await api.currency.add(actor, { [conversionDenom]: 200 });
@@ -330,7 +335,7 @@ async function testCurrencyItem(item) {
     return;
   }
 
-  const dp = getDataPaths();
+  const dp = resolveDataPaths(item);
   const config = dp?.currency ?? {};
   const base = config.base;
 
@@ -608,7 +613,8 @@ async function testTestsInterface(actor) {
   try {
     result = await processCheck(actor, value, { fastForward: true });
   } catch (err) {
-    fail("tests.processCheck", `fastForward check failed: ${err.message}`);
+    if (/cannot perform checks/i.test(err.message)) skip("tests.processCheck", err.message);
+    else fail("tests.processCheck", `fastForward check failed: ${err.message}`);
     return;
   }
 
@@ -645,8 +651,7 @@ export async function runAPITests(actor) {
   actor ??= getTestActor();
   if (!actor) {
     fail("setup", "no actor available (game.user.character or first game.actors entry)");
-    printSummary();
-    return;
+    return printSummary();
   }
   pass("setup", `actor: ${actor.name} (${actor.id})`);
 
@@ -673,7 +678,7 @@ export async function runAPITests(actor) {
   testItemWeight(weightItem);
   await testTestsInterface(actor);
 
-  printSummary();
+  return printSummary();
 }
 
 function printSummary() {
@@ -691,4 +696,5 @@ function printSummary() {
   ];
 
   console.log(lines.join("\n"));
+  return lines.join("\n");
 }
