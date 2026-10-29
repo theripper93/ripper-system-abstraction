@@ -1,9 +1,13 @@
 import { getDataPaths } from "../systems/_index.js";
 
+const mergedCache = new WeakMap();
+
 /**
- * Resolve the dataPaths adapter for the world's current game system.
+ * Resolve the dataPaths adapter for the world's current game system. When a
+ * document is given, `dataPaths.overrides[documentName][type]` is merged over
+ * the base configuration (e.g. NPC-specific paths).
  *
- * @param {Document} document
+ * @param {Document} [document]
  * @returns {Object} The system's dataPaths configuration.
  */
 export function resolveDataPaths(document) {
@@ -13,35 +17,46 @@ export function resolveDataPaths(document) {
       `[Ripper System Abstraction] No system adapter is loaded for "${game.system.id}".`,
     );
   }
-  return dataPaths;
+  const override = dataPaths.overrides?.[document?.documentName]?.[document?.type];
+  if (!override) return dataPaths;
+
+  let cache = mergedCache.get(dataPaths);
+  if (!cache) mergedCache.set(dataPaths, (cache = new Map()));
+  const key = `${document.documentName}.${document.type}`;
+  if (!cache.has(key)) cache.set(key, foundry.utils.mergeObject(dataPaths, override, { inplace: false }));
+  return cache.get(key);
 }
 
 /**
  * Resolve a path spec (string, or array of candidate strings) to a single
- * concrete path. Returns null when no usable path exists.
+ * concrete path. Candidates are tried in order and the first one holding a
+ * value on the document wins; otherwise the first usable candidate is used.
+ * Returns null when no usable path exists.
  *
  * @param {string|string[]} spec
+ * @param {Document} [document]
  * @returns {string|null}
  */
-export function resolvePath(spec) {
-  if (Array.isArray(spec)) {
-    for (const candidate of spec) {
-      if (typeof candidate === "string" && candidate) return candidate;
-    }
-    return null;
+export function resolvePath(spec, document) {
+  const candidates = (Array.isArray(spec) ? spec : [spec]).filter((c) => typeof c === "string" && c);
+  if (document) {
+    const found = candidates.find((c) => foundry.utils.getProperty(document.system, c) != null);
+    if (found) return found;
   }
-  return typeof spec === "string" && spec ? spec : null;
+  return candidates[0] ?? null;
 }
 
 /**
- * Read the value at a dataPaths spec from a document's system data.
+ * Read the value at a dataPaths spec from a document's system data. A spec
+ * may also be a function `(document) => value` for derived, read-only data.
  *
  * @param {Document} document
- * @param {string|string[]} spec
+ * @param {string|string[]|Function} spec
  * @returns {*}
  */
 export function getPath(document, spec) {
-  const path = resolvePath(spec);
+  if (typeof spec === "function") return spec(document);
+  const path = resolvePath(spec, document);
   if (!path) return undefined;
   return foundry.utils.getProperty(document.system, path);
 }
@@ -55,9 +70,9 @@ export function getPath(document, spec) {
  * @returns {Object<string, *>}
  */
 export function setPath(document, spec, value) {
-  const path = resolvePath(spec);
+  const path = typeof spec === "function" ? null : resolvePath(spec, document);
   if (!path) {
-    throw unsupported(document, "data write", "no path configured");
+    throw unsupported(document, "data write", "no writable path configured");
   }
   return { [`system.${path}`]: value };
 }

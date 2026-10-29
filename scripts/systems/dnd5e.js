@@ -61,9 +61,14 @@ export default async function dnd5e() {
   return {
     dataPaths: {
     actor: {
-      type: ["details.type.value", "details.type.custom"],
+      type: (actor) => {
+        const type = actor.system.details?.type;
+        return type?.value === "custom" ? type.custom : type?.value;
+      },
+      typeChoices: () => CONFIG.DND5E.creatureTypes,
       subtype: "details.type.subtype",
       size: "traits.size",
+      sizes: () => Object.fromEntries(Object.entries(CONFIG.DND5E.actorSizes).map(([key, size]) => [key, size.token ?? 1])),
       level: "details.level",
       role: "",
     },
@@ -85,6 +90,7 @@ export default async function dnd5e() {
 
       equipped: "equipped",
       attuned: "attuned",
+      attunable: (item) => !!item.system.attunement,
 
       uses: "uses.value",
       usesSpent: "uses.spent",
@@ -116,7 +122,7 @@ export default async function dnd5e() {
       denominations: {
         cp: { value: 0.01 },
         sp: { value: 0.1 },
-        ep: { value: 0.5 },
+        ep: { value: 0.5, change: false },
         gp: { value: 1 },
         pp: { value: 10 },
       },
@@ -125,7 +131,15 @@ export default async function dnd5e() {
     experience: {
       current: "details.xp.value",
       maximum: "details.xp.max",
-      level: "details.level",
+    },
+
+    overrides: {
+      Actor: {
+        npc: {
+          actor: { level: "details.cr" },
+          experience: { current: "", maximum: "" },
+        },
+      },
     },
 
     features: {
@@ -135,6 +149,7 @@ export default async function dnd5e() {
       supportsCurrency: true,
       supportsWeight: true,
       supportsEquipment: true,
+      supportsAttunement: true,
     },
     },
     testsInterface: {

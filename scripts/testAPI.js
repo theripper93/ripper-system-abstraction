@@ -218,12 +218,13 @@ async function testHealth(actor) {
   }
 
   const beforeDamage = api.health.getTotal(actor);
-  await api.health.damage(actor, 5);
+  const damage = Math.min(5, beforeDamage);
+  await api.health.damage(actor, damage);
   const afterDamage = api.health.getTotal(actor);
-  if (round(beforeDamage - afterDamage) === 5) {
+  if (round(beforeDamage - afterDamage) === damage) {
     pass("health.damage (temp-first)", `total ${round(beforeDamage)} -> ${round(afterDamage)}`);
   } else {
-    fail("health.damage (temp-first)", `total decreased by ${round(beforeDamage - afterDamage)}, expected 5`);
+    fail("health.damage (temp-first)", `total decreased by ${round(beforeDamage - afterDamage)}, expected ${damage}`);
   }
 }
 
@@ -293,6 +294,33 @@ async function testCurrencyActor(actor) {
     }
   } else {
     skip("currency.remove conversion", "no secondary denomination available");
+  }
+
+  const ordered = Object.keys(api.currency.get(actor))
+    .filter((d) => config.denominations?.[d])
+    .sort((a, b) => config.denominations[a].value - config.denominations[b].value);
+  if (ordered.length >= 2 && !config.actor?.handler) {
+    const [low, high] = ordered;
+    const ratio = config.denominations[high].value / config.denominations[low].value;
+    await api.currency.set(actor, Object.fromEntries(ordered.map((d) => [d, d === high ? 2 : 0])));
+    await api.currency.remove(actor, { [high]: 1, [low]: 1 });
+    const wallet = api.currency.get(actor);
+    const whole = Object.values(wallet).every((v) => Number.isInteger(v) && v >= 0);
+    const expected = round((2 * ratio - ratio - 1) * config.denominations[low].value);
+    if (whole && round(api.currency.getTotal(actor)) === expected) {
+      pass("currency.remove multi + change", JSON.stringify(wallet));
+    } else {
+      fail("currency.remove multi + change", `expected total ${expected} in whole coins, got ${JSON.stringify(wallet)}`);
+    }
+
+    try {
+      await api.currency.remove(actor, { [high]: 1000000 });
+      fail("currency.remove insufficient", "did not throw");
+    } catch (err) {
+      pass("currency.remove insufficient", "throws");
+    }
+  } else {
+    skip("currency.remove multi + change", "needs two path-based denominations");
   }
 }
 
@@ -379,13 +407,7 @@ async function testItemEquipment(item) {
     return;
   }
 
-  let equipped;
-  try {
-    equipped = api.item.isEquipped(item);
-  } catch (err) {
-    skip("item.equipment", "system does not support equipment");
-    return;
-  }
+  const equipped = api.item.isEquipped(item);
   pass("item.isEquipped", `equipped ${equipped}`);
 
   await api.item.equip(item);
@@ -447,6 +469,100 @@ async function testItemUses(item) {
     pass("item.restoreUses", `uses ${maximum}`);
   } else {
     fail("item.restoreUses", `expected ${maximum}, got ${api.item.getUses(item)}`);
+  }
+}
+
+async function testItemAttunement(item) {
+  if (!item) {
+    skip("item.attunement", "no attunable item found");
+    return;
+  }
+
+  pass("item.isAttuned", `attuned ${api.item.isAttuned(item)}`);
+
+  await api.item.attune(item);
+  if (api.item.isAttuned(item) === true) {
+    pass("item.attune", "attuned");
+  } else {
+    fail("item.attune", "isAttuned did not become true");
+  }
+
+  await api.item.unattune(item);
+  if (api.item.isAttuned(item) === false) {
+    pass("item.unattune", "unattuned");
+  } else {
+    fail("item.unattune", "isAttuned did not become false");
+  }
+}
+
+function testItemWeight(item) {
+  if (!item) {
+    skip("item.weight", "no item with a weight found");
+    return;
+  }
+
+  const weight = api.item.getWeight(item);
+  const total = api.item.getTotalWeight(item);
+  const quantity = api.item.getQuantity(item) ?? 1;
+  pass("item.getWeight", `weight ${weight}`);
+  if (round(total) === round(weight * quantity)) {
+    pass("item.getTotalWeight", `total ${round(total)} (x${quantity})`);
+  } else {
+    fail("item.getTotalWeight", `expected ${round(weight * quantity)}, got ${total}`);
+  }
+}
+
+/* ------------------------------------------------------------------------- */
+/* actor + experience                                                        */
+/* ------------------------------------------------------------------------- */
+
+function testActor(actor) {
+  const types = api.actor.getTypes(actor);
+  if (Array.isArray(types) && types.every((t) => typeof t === "string")) {
+    pass("actor.getTypes", JSON.stringify(types));
+  } else {
+    fail("actor.getTypes", `not a string array: ${JSON.stringify(types)}`);
+  }
+
+  const all = api.actor.getAllTypes();
+  if (Array.isArray(all) && all.every((t) => typeof t.id === "string" && typeof t.label === "string")) {
+    pass("actor.getAllTypes", `${all.length} types${all.length ? `, e.g. ${all[0].id}=${all[0].label}` : ""}`);
+  } else {
+    fail("actor.getAllTypes", "not an array of {id, label}");
+  }
+
+  const size = api.actor.getSize(actor);
+  if (typeof size === "number" && size > 0) {
+    pass("actor.getSize", `${size} squares`);
+  } else {
+    fail("actor.getSize", `expected a positive number, got ${size}`);
+  }
+
+  pass("actor.getLevel", `level ${api.actor.getLevel(actor)}`);
+  pass("actor.getSubtype", `subtype ${api.actor.getSubtype(actor)}`);
+  pass("actor.getRole", `role ${api.actor.getRole(actor)}`);
+}
+
+async function testExperience(actor) {
+  const current = api.experience.getCurrent(actor);
+  if (current == null) {
+    skip("experience", "actor has no experience value");
+    return;
+  }
+  pass("experience.getCurrent", `xp ${current}, next ${api.experience.getMaximum(actor)}`);
+
+  await api.experience.add(actor, 10);
+  if (api.experience.getCurrent(actor) === current + 10) {
+    pass("experience.add", `xp ${current + 10}`);
+  } else {
+    fail("experience.add", `expected ${current + 10}, got ${api.experience.getCurrent(actor)}`);
+  }
+
+  await api.experience.set(actor, current);
+  if (api.experience.getCurrent(actor) === current) {
+    pass("experience.set", `xp ${current}`);
+  } else {
+    fail("experience.set", `expected ${current}, got ${api.experience.getCurrent(actor)}`);
   }
 }
 
@@ -539,19 +655,13 @@ export async function runAPITests(actor) {
 
   const quantityItem = pickItem(items.filter((i) => api.item.getQuantity(i) != null));
   const usesItem = pickItem(items.filter((i) => api.item.getUses(i) != null && api.item.getMaximumUses(i) != null));
-  let equipmentItem = null;
-  for (const i of items) {
-    try {
-      if (typeof api.item.isEquipped(i) === "boolean") {
-        equipmentItem = i;
-        break;
-      }
-    } catch (err) {
-      continue;
-    }
-  }
+  const equipmentItem = items.find((i) => api.item.isEquipped(i) != null) ?? null;
+  const attunementItem = items.find((i) => api.item.isAttuned(i) != null) ?? null;
+  const weightItem = items.find((i) => api.item.getWeight(i) != null) ?? null;
   const currencyItem = pickItem(items.filter((i) => Object.keys(api.currency.getItemValue(i)).length > 0));
 
+  testActor(actor);
+  await testExperience(actor);
   await testData(actor);
   await testHealth(actor);
   await testCurrencyActor(actor);
@@ -559,6 +669,8 @@ export async function runAPITests(actor) {
   await testItemQuantity(quantityItem);
   await testItemEquipment(equipmentItem);
   await testItemUses(usesItem);
+  await testItemAttunement(attunementItem);
+  testItemWeight(weightItem);
   await testTestsInterface(actor);
 
   printSummary();

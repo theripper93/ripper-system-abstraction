@@ -14,20 +14,47 @@ function numeric(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-/**
- * Interpret the equipped state of an item. Boolean paths need no metadata;
- * numeric and string enum paths use the optional `equippedValue` /
- * `unequippedValue` hints declared on the adapter.
- */
-function isEquippedValue(current, dp) {
-  const hint = itemConfig(dp).equippedValue;
-  if (typeof current === "boolean") return current;
-  if (typeof current === "number") return current >= (typeof hint === "number" ? hint : 1);
-  return current === (typeof hint === "string" ? hint : "equipped");
+const STATES = {
+  equipped: { feature: "supportsEquipment", allowed: "equippable", on: "equippedValue", off: "unequippedValue" },
+  attuned: { feature: "supportsAttunement", allowed: "attunable", on: "attunedValue", off: "unattunedValue" },
+};
+
+function stateSpec(item, dp, key) {
+  const state = STATES[key];
+  const cfg = itemConfig(dp);
+  if (dp.features?.[state.feature] !== true || !cfg[key]) return null;
+  if (typeof cfg[state.allowed] === "function" && !cfg[state.allowed](item)) return null;
+  return getPath(item, cfg[key]) == null ? null : cfg[key];
 }
 
 /**
- * Item quantity, equipment, and uses/charges operations. Uses
+ * Interpret a toggle state (equipped/attuned) of an item. Boolean paths need
+ * no metadata; numeric and string enum paths use the optional
+ * `equippedValue`/`attunedValue` hints declared on the adapter. A numeric
+ * hint is an inclusive threshold; a string is matched exactly.
+ */
+function readState(item, key) {
+  const dp = resolveDataPaths(item);
+  const spec = stateSpec(item, dp, key);
+  if (!spec) return null;
+  const current = getPath(item, spec);
+  const hint = itemConfig(dp)[STATES[key].on];
+  if (typeof current === "boolean") return current;
+  if (typeof current === "number") return current >= (typeof hint === "number" ? hint : 1);
+  return current === (typeof hint === "string" ? hint : key);
+}
+
+function writeState(item, key, enabled, operation, options) {
+  const dp = resolveDataPaths(item);
+  const spec = stateSpec(item, dp, key);
+  if (!spec) throw unsupported(item, operation, `item has no ${key} state`);
+  const state = STATES[key];
+  const value = enabled ? (itemConfig(dp)[state.on] ?? true) : (itemConfig(dp)[state.off] ?? false);
+  return executeUpdate(item, setPath(item, spec, value), options);
+}
+
+/**
+ * Item quantity, equipment, attunement, weight, and uses/charges operations. Uses
  * `dataPaths.item` and `features` and never references system-specific paths
  * directly.
  */
@@ -93,19 +120,14 @@ export const item = {
   // ---------------------------------------------------------------
 
   /**
-   * Whether the Item is equipped.
+   * Whether the Item is equipped. Returns null when the system or this Item
+   * has no equipped state.
    *
    * @param {Item} item
-   * @returns {boolean}
+   * @returns {boolean|null}
    */
   isEquipped(item) {
-    const dp = resolveDataPaths(item);
-    if (dp.features?.supportsEquipment !== true) {
-      throw unsupported(item, "item.isEquipped", "system does not support equipment");
-    }
-    const spec = itemConfig(dp).equipped;
-    if (!spec) throw unsupported(item, "item.isEquipped", "no equipped path");
-    return isEquippedValue(getPath(item, spec), dp);
+    return readState(item, "equipped");
   },
 
   /**
@@ -115,14 +137,7 @@ export const item = {
    * @returns {Promise<Item|Object<string,*>>}
    */
   equip(item, options = {}) {
-    const dp = resolveDataPaths(item);
-    if (dp.features?.supportsEquipment !== true) {
-      throw unsupported(item, "item.equip", "system does not support equipment");
-    }
-    const spec = itemConfig(dp).equipped;
-    if (!spec) throw unsupported(item, "item.equip", "no equipped path");
-    const value = itemConfig(dp).equippedValue ?? true;
-    return executeUpdate(item, setPath(item, spec, value), options);
+    return writeState(item, "equipped", true, "item.equip", options);
   },
 
   /**
@@ -132,14 +147,7 @@ export const item = {
    * @returns {Promise<Item|Object<string,*>>}
    */
   unequip(item, options = {}) {
-    const dp = resolveDataPaths(item);
-    if (dp.features?.supportsEquipment !== true) {
-      throw unsupported(item, "item.unequip", "system does not support equipment");
-    }
-    const spec = itemConfig(dp).equipped;
-    if (!spec) throw unsupported(item, "item.unequip", "no equipped path");
-    const value = itemConfig(dp).unequippedValue ?? false;
-    return executeUpdate(item, setPath(item, spec, value), options);
+    return writeState(item, "equipped", false, "item.unequip", options);
   },
 
   /**
@@ -149,9 +157,74 @@ export const item = {
    * @returns {Promise<Item|Object<string,*>>}
    */
   toggleEquipped(item, options = {}) {
-    return this.isEquipped(item)
-      ? this.unequip(item, options)
-      : this.equip(item, options);
+    return writeState(item, "equipped", !readState(item, "equipped"), "item.toggleEquipped", options);
+  },
+
+  // ---------------------------------------------------------------
+  // Attunement
+  // ---------------------------------------------------------------
+
+  /**
+   * Whether the Item is attuned (bonded, linked) to its Actor. Returns null
+   * when the system or this Item has no attunement state.
+   *
+   * @param {Item} item
+   * @returns {boolean|null}
+   */
+  isAttuned(item) {
+    return readState(item, "attuned");
+  },
+
+  /**
+   * @param {Item} item
+   * @param {Object} [options]
+   * @param {boolean} [options.update=true]
+   * @returns {Promise<Item|Object<string,*>>}
+   */
+  attune(item, options = {}) {
+    return writeState(item, "attuned", true, "item.attune", options);
+  },
+
+  /**
+   * @param {Item} item
+   * @param {Object} [options]
+   * @param {boolean} [options.update=true]
+   * @returns {Promise<Item|Object<string,*>>}
+   */
+  unattune(item, options = {}) {
+    return writeState(item, "attuned", false, "item.unattune", options);
+  },
+
+  // ---------------------------------------------------------------
+  // Weight
+  // ---------------------------------------------------------------
+
+  /**
+   * The weight of a single unit of the Item, in the system's own unit.
+   * Returns null when unsupported.
+   *
+   * @param {Item} item
+   * @returns {number|null}
+   */
+  getWeight(item) {
+    const dp = resolveDataPaths(item);
+    if (dp.features?.supportsWeight !== true) return null;
+    return numeric(getPath(item, itemConfig(dp).weight));
+  },
+
+  /**
+   * The weight of the whole stack (unit weight x quantity). Returns null when
+   * unsupported.
+   *
+   * @param {Item} item
+   * @returns {number|null}
+   */
+  getTotalWeight(item) {
+    const dp = resolveDataPaths(item);
+    if (dp.features?.supportsWeight !== true) return null;
+    const weight = numeric(getPath(item, itemConfig(dp).weight));
+    if (weight == null) return null;
+    return weight * (numeric(getPath(item, itemConfig(dp).quantity)) ?? 1);
   },
 
   // ---------------------------------------------------------------

@@ -19,7 +19,10 @@
  * - Use dot notation for nested properties.
  * - Use an empty string ("") when a value is not supported or unavailable.
  * - Use an empty object ({}) when a mapping contains multiple entries.
- * - Use arrays when a value may exist in multiple possible locations.
+ * - Use arrays when a value may exist in multiple possible locations; the
+ *   first candidate holding a value on the document is used.
+ * - Use a function `(document) => value` for derived values that cannot be
+ *   expressed as a single path. Function specs are read-only.
  * - Boolean properties are feature flags describing whether a system
  *   supports a particular concept.
  *
@@ -30,13 +33,24 @@
  * Basic information about an Actor or creature.
  *
  * type:
- *   The creature/entity type.
+ *   The creature/entity type(s). The value may be a single string or an
+ *   array of strings (systems allowing several types, e.g. undead +
+ *   humanoid); the API always returns an array.
+ *
+ * typeChoices (function):
+ *   `() => ({ [typeId]: label | { label } })` returning every type the system
+ *   declares, independent of any actor. Labels are localized by the API.
  *
  * subtype:
  *   Optional secondary creature/entity classification.
  *
  * size:
  *   Creature/entity size.
+ *
+ * sizes (object or function returning an object):
+ *   Maps each stored size value to the creature's footprint in grid squares
+ *   (e.g. { tiny: 0.5, med: 1, lg: 2 }). When the stored size has no mapping
+ *   the API falls back to the prototype token width.
  *
  * level:
  *   Character or creature level.
@@ -86,13 +100,21 @@
  *   Item quantity / stack size.
  *
  * weight:
- *   Item weight.
+ *   Item weight (of a single unit, in the system's own unit).
  *
  * equipped:
  *   Whether the item is equipped.
  *
  * attuned:
  *   Whether the item is attuned, bonded, or otherwise linked to the Actor.
+ *
+ * attunedValue / unattunedValue (optional):
+ *   Same as equippedValue / unequippedValue, for non-boolean attunement.
+ *
+ * equippable / attunable (optional functions):
+ *   `(item) => boolean` for systems where only some items carrying the field
+ *   can actually be equipped/attuned (e.g. dnd5e attunement requirement).
+ *   When false, the API treats the item as having no such state.
  *
  * equippedValue / unequippedValue (optional):
  *   For systems whose equipped field is not a boolean, these declare the
@@ -195,8 +217,19 @@
  * maximum:
  *   Experience required for the next level, if applicable.
  *
- * level:
- *   Current level.
+ * (The character level lives in `actor.level`.)
+ *
+ * ---------------------------------------------------------------------------
+ * OVERRIDES
+ * ---------------------------------------------------------------------------
+ *
+ * Optional per document-type adjustments, merged over the base configuration
+ * for documents of that type:
+ *
+ *   overrides: {
+ *     Actor: { npc: { actor: { level: "details.cr" }, experience: { current: "" } } },
+ *     Item: { spell: { item: { quantity: "" } } },
+ *   }
  *
  * ---------------------------------------------------------------------------
  * FEATURES
@@ -221,6 +254,9 @@
  *
  * supportsEquipment:
  *   Items can be equipped.
+ *
+ * supportsAttunement:
+ *   Items can be attuned/bonded to an Actor.
  */
 
 export default async function systemAdapter() {
@@ -238,8 +274,10 @@ export default async function systemAdapter() {
 
   actor: {
     type: "",
+    typeChoices: () => ({}),
     subtype: "",
     size: "",
+    sizes: {},
     level: "",
     role: "",
   },
@@ -316,6 +354,9 @@ export default async function systemAdapter() {
     //   sp: { value: 0.1 }
     //   gp: { value: 1 }
     //   pp: { value: 10 }
+    //
+    // Add `change: false` to a denomination that may be spent but should
+    // never be handed out as change (e.g. dnd5e electrum).
     denominations: {},
   },
 
@@ -326,7 +367,6 @@ export default async function systemAdapter() {
   experience: {
     current: "",
     maximum: "",
-    level: "",
   },
 
   // -------------------------------------------------------------------------
@@ -340,6 +380,7 @@ export default async function systemAdapter() {
     supportsCurrency: false,
     supportsWeight: false,
     supportsEquipment: false,
+    supportsAttunement: false,
   },
     },
 

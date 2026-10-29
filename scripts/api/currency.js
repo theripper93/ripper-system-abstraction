@@ -14,13 +14,122 @@ function actorHandler(config) {
   return config.actor?.handler ?? null;
 }
 
+function actorPaths(config) {
+  return config.actor?.denominations ?? {};
+}
+
 function denominationRatio(config, name) {
   const entry = config.denominations?.[name];
   return typeof entry?.value === "number" ? entry.value : 1;
 }
 
-function roundAmount(value) {
-  return Math.round(value * 1e6) / 1e6;
+function toBase(config, amounts) {
+  let total = 0;
+  for (const [name, amount] of Object.entries(amounts)) {
+    if (typeof amount === "number") total += amount * denominationRatio(config, name);
+  }
+  return Math.round(total * 1e6) / 1e6;
+}
+
+function readWallet(actor, config) {
+  const handler = actorHandler(config);
+  if (handler) return handler.get(actor) ?? {};
+  const wallet = {};
+  for (const [name, path] of Object.entries(actorPaths(config))) {
+    if (path) wallet[name] = getPath(actor, path) ?? 0;
+  }
+  return wallet;
+}
+
+function writeWallet(actor, config, amounts, operation, options) {
+  const paths = actorPaths(config);
+  const changes = {};
+  for (const [name, amount] of Object.entries(amounts)) {
+    if (!paths[name]) throw unsupported(actor, operation, `actor does not support denomination "${name}"`);
+    Object.assign(changes, setPath(actor, paths[name], amount));
+  }
+  return executeUpdate(actor, changes, options);
+}
+
+function assertDenominations(actor, wallet, currency, operation) {
+  for (const name of Object.keys(currency)) {
+    if (!(name in wallet)) throw unsupported(actor, operation, `actor does not support denomination "${name}"`);
+  }
+}
+
+function assertCanUpdate(actor, options, operation) {
+  if (options.update === false) throw unsupported(actor, operation, "update: false is not available for handler-based currency");
+}
+
+async function handlerSet(actor, handler, wallet, currency) {
+  for (const [name, target] of Object.entries(currency)) {
+    const delta = target - (wallet[name] ?? 0);
+    if (delta > 0) await handler.add(actor, { [name]: delta });
+    else if (delta < 0) await handler.remove(actor, { [name]: -delta });
+  }
+  return actor;
+}
+
+async function handlerAdd(actor, handler, currency) {
+  await handler.add(actor, currency);
+  return actor;
+}
+
+async function handlerRemove(actor, handler, currency) {
+  for (const [name, amount] of Object.entries(currency)) {
+    if (amount > 0 && !(await handler.remove(actor, { [name]: amount }))) {
+      throw unsupported(actor, "currency.remove", `insufficient funds to remove ${name}`);
+    }
+  }
+  return actor;
+}
+
+function changedEntries(before, after) {
+  return Object.fromEntries(Object.entries(after).filter(([name, amount]) => amount !== before[name]));
+}
+
+/**
+ * Pay `request` out of `wallet`, spending the requested denominations first,
+ * then the largest coins that fit, and finally breaking the smallest coin that
+ * covers the remainder and returning change in lower denominations (except
+ * those declared with `change: false`). Amounts
+ * are handled in whole units of the smallest denomination, so no fractional
+ * coins are produced. Returns null when funds are insufficient.
+ */
+function withdraw(config, wallet, request) {
+  const names = Object.keys(wallet).sort((a, b) => denominationRatio(config, b) - denominationRatio(config, a));
+  const unit = Math.min(...names.map((name) => denominationRatio(config, name)));
+  const scale = (name) => Math.round(denominationRatio(config, name) / unit);
+  const next = { ...wallet };
+
+  let owed = 0;
+  for (const [name, amount] of Object.entries(request)) {
+    if (!(amount > 0)) continue;
+    const direct = Math.min(next[name], amount);
+    next[name] -= direct;
+    owed += (amount - direct) * scale(name);
+  }
+
+  for (const name of names) {
+    const take = Math.min(next[name], Math.floor(owed / scale(name)));
+    next[name] -= take;
+    owed -= take * scale(name);
+  }
+
+  if (owed > 0) {
+    const breaker = names.findLast((name) => next[name] >= 1 && scale(name) > owed);
+    if (!breaker) return null;
+    next[breaker] -= 1;
+    let change = scale(breaker) - owed;
+    for (const name of names) {
+      if (scale(name) >= scale(breaker) || config.denominations?.[name]?.change === false) continue;
+      const give = Math.floor(change / scale(name));
+      next[name] += give;
+      change -= give * scale(name);
+    }
+  }
+
+  return next;
 }
 
 /**
@@ -36,15 +145,7 @@ export const currency = {
    * @returns {Object<string, number>}
    */
   get(actor) {
-    const config = currencyConfig(resolveDataPaths(actor));
-    const handler = actorHandler(config);
-    if (handler) return handler.get(actor) ?? {};
-    const actorDenominations = config.actor?.denominations ?? {};
-    const result = {};
-    for (const [name, path] of Object.entries(actorDenominations)) {
-      result[name] = getPath(actor, path) ?? 0;
-    }
-    return result;
+    return readWallet(actor, currencyConfig(resolveDataPaths(actor)));
   },
 
   /**
@@ -55,28 +156,8 @@ export const currency = {
    * @returns {number}
    */
   getTotal(actor) {
-    const dp = resolveDataPaths(actor);
-    const config = currencyConfig(dp);
-    const handler = actorHandler(config);
-    if (handler) {
-      const amounts = handler.get(actor) ?? {};
-      let total = 0;
-      for (const [name, amount] of Object.entries(amounts)) {
-        if (typeof amount === "number") {
-          total += amount * denominationRatio(config, name);
-        }
-      }
-      return total;
-    }
-    const actorDenominations = config.actor?.denominations ?? {};
-    let total = 0;
-    for (const [name, path] of Object.entries(actorDenominations)) {
-      const amount = getPath(actor, path);
-      if (typeof amount === "number") {
-        total += amount * denominationRatio(config, name);
-      }
-    }
-    return total;
+    const config = currencyConfig(resolveDataPaths(actor));
+    return toBase(config, readWallet(actor, config));
   },
 
   /**
@@ -86,32 +167,18 @@ export const currency = {
    * @param {Actor} actor
    * @param {Object<string, number>} currency
    * @param {Object} [options]
-   * @param {boolean} [options.update=true]
+   * @param {boolean} [options.update=true]  When false, returns the update payload (path-based currency only).
    * @returns {Promise<Actor|Object<string,*>>}
    */
   set(actor, currency = {}, options = {}) {
     const config = currencyConfig(resolveDataPaths(actor));
     const handler = actorHandler(config);
-    if (handler) {
-      const current = handler.get(actor) ?? {};
-      const operations = [];
-      for (const [name, target] of Object.entries(currency)) {
-        const delta = target - (current[name] ?? 0);
-        if (delta > 0) operations.push(handler.add(actor, { [name]: delta }));
-        else if (delta < 0) operations.push(handler.remove(actor, { [name]: -delta }));
-      }
-      return Promise.all(operations);
-    }
-    const actorDenominations = config.actor?.denominations ?? {};
-    const changes = {};
-    for (const [name, amount] of Object.entries(currency)) {
-      const path = actorDenominations[name];
-      if (!path) {
-        throw unsupported(actor, "currency.set", `actor does not support denomination "${name}"`);
-      }
-      Object.assign(changes, setPath(actor, path, amount));
-    }
-    return executeUpdate(actor, changes, options);
+    if (!handler) return writeWallet(actor, config, currency, "currency.set", options);
+
+    assertCanUpdate(actor, options, "currency.set");
+    const wallet = readWallet(actor, config);
+    assertDenominations(actor, wallet, currency, "currency.set");
+    return handlerSet(actor, handler, wallet, currency);
   },
 
   /**
@@ -120,88 +187,50 @@ export const currency = {
    * @param {Actor} actor
    * @param {Object<string, number>} currency
    * @param {Object} [options]
-   * @param {boolean} [options.update=true]
+   * @param {boolean} [options.update=true]  When false, returns the update payload (path-based currency only).
    * @returns {Promise<Actor|Object<string,*>>}
    */
   add(actor, currency = {}, options = {}) {
     const config = currencyConfig(resolveDataPaths(actor));
+    const wallet = readWallet(actor, config);
+    assertDenominations(actor, wallet, currency, "currency.add");
     const handler = actorHandler(config);
-    if (handler) return handler.add(actor, currency);
-    const actorDenominations = config.actor?.denominations ?? {};
-    const changes = {};
-    for (const [name, amount] of Object.entries(currency)) {
-      const path = actorDenominations[name];
-      if (!path) {
-        throw unsupported(actor, "currency.add", `actor does not support denomination "${name}"`);
-      }
-      const current = getPath(actor, path) ?? 0;
-      Object.assign(changes, setPath(actor, path, current + amount));
+    if (handler) {
+      assertCanUpdate(actor, options, "currency.add");
+      return handlerAdd(actor, handler, currency);
     }
-    return executeUpdate(actor, changes, options);
+    const next = {};
+    for (const [name, amount] of Object.entries(currency)) next[name] = wallet[name] + amount;
+    return writeWallet(actor, config, next, "currency.add", options);
   },
 
   /**
-   * Remove currency from the Actor. When the requested denomination is
-   * unavailable, higher denominations are converted to cover the shortfall.
-   * Never produces negative denominations; throws when funds are
+   * Remove currency from the Actor. Requested denominations are spent first;
+   * any shortfall is covered by other denominations, making change in whole
+   * coins. Never produces negative denominations; throws when funds are
    * insufficient.
    *
    * @param {Actor} actor
    * @param {Object<string, number>} currency
    * @param {Object} [options]
-   * @param {boolean} [options.update=true]
+   * @param {boolean} [options.update=true]  When false, returns the update payload (path-based currency only).
    * @returns {Promise<Actor|Object<string,*>>}
    */
   remove(actor, currency = {}, options = {}) {
     const config = currencyConfig(resolveDataPaths(actor));
+    const wallet = readWallet(actor, config);
+    assertDenominations(actor, wallet, currency, "currency.remove");
     const handler = actorHandler(config);
     if (handler) {
-      const settled = Promise.all(
-        Object.entries(currency)
-          .filter(([, amount]) => amount > 0)
-          .map(async ([name, amount]) => {
-            const ok = await handler.remove(actor, { [name]: amount });
-            if (!ok) {
-              throw unsupported(actor, "currency.remove", `insufficient funds to remove ${name}`);
-            }
-          }),
-      );
-      return options.update === false ? Promise.resolve({}) : settled;
+      assertCanUpdate(actor, options, "currency.remove");
+      if (toBase(config, currency) > toBase(config, wallet)) {
+        throw unsupported(actor, "currency.remove", "insufficient funds");
+      }
+      return handlerRemove(actor, handler, currency);
     }
-    const actorDenominations = config.actor?.denominations ?? {};
-    const changes = {};
-
-    for (const [name, amount] of Object.entries(currency)) {
-      if (amount <= 0) continue;
-      const path = actorDenominations[name];
-      if (!path) {
-        throw unsupported(actor, "currency.remove", `actor does not support denomination "${name}"`);
-      }
-
-      let remainingUnits = amount * denominationRatio(config, name);
-
-      const available = Object.entries(actorDenominations).sort(
-        (a, b) => denominationRatio(config, b[0]) - denominationRatio(config, a[0]),
-      );
-
-      for (const [denomination, denominationPath] of available) {
-        if (remainingUnits <= 0) break;
-        const current = getPath(actor, denominationPath) ?? 0;
-        const units = current * denominationRatio(config, denomination);
-        if (units <= 0) continue;
-
-        const takeUnits = Math.min(remainingUnits, units);
-        const takeAmount = takeUnits / denominationRatio(config, denomination);
-        changes[`system.${denominationPath}`] = roundAmount(current - takeAmount);
-        remainingUnits = roundAmount(remainingUnits - takeUnits);
-      }
-
-      if (remainingUnits > 0) {
-        throw unsupported(actor, "currency.remove", `insufficient funds to remove ${name}`);
-      }
-    }
-
-    return executeUpdate(actor, changes, options);
+    const next = withdraw(config, wallet, currency);
+    if (!next) throw unsupported(actor, "currency.remove", "insufficient funds");
+    return writeWallet(actor, config, changedEntries(wallet, next), "currency.remove", options);
   },
 
   /**
@@ -217,21 +246,23 @@ export const currency = {
       const value = getPath(item, itemConfig.single.value);
       if (value == null) return {};
       const denomination = itemConfig.single.denomination
-        ? (getPath(item, itemConfig.single.denomination) ?? config.base ?? "")
+        ? (getPath(item, itemConfig.single.denomination) || config.base || "")
         : (config.base ?? "");
       return { [denomination]: value };
     }
 
     const result = {};
     for (const [name, path] of Object.entries(itemConfig.denominations ?? {})) {
-      result[name] = getPath(item, path) ?? 0;
+      if (path) result[name] = getPath(item, path) ?? 0;
     }
     return result;
   },
 
   /**
    * Set an Item's monetary value. Supports both single-denomination and
-   * multi-denomination representations.
+   * multi-denomination representations. For single-denomination systems with
+   * a denomination path, a single supplied denomination is stored as-is;
+   * otherwise the value is converted into the base denomination.
    *
    * @param {Item} item
    * @param {Object<string, number>} currency
@@ -244,18 +275,20 @@ export const currency = {
     const itemConfig = config.item ?? {};
 
     if (itemConfig.single?.value) {
+      const entries = Object.entries(currency);
+      const denominationPath = itemConfig.single.denomination;
+      if (denominationPath && entries.length === 1 && config.denominations?.[entries[0][0]]) {
+        const [[name, amount]] = entries;
+        return executeUpdate(item, {
+          ...setPath(item, itemConfig.single.value, amount),
+          ...setPath(item, denominationPath, name),
+        }, options);
+      }
+
       const base = config.base;
       if (!base) throw unsupported(item, "currency.setItemValue", "no base denomination configured");
-
-      let total = 0;
-      for (const [name, amount] of Object.entries(currency)) {
-        total += amount * denominationRatio(config, name);
-      }
-
-      const changes = setPath(item, itemConfig.single.value, total);
-      if (itemConfig.single.denomination) {
-        Object.assign(changes, setPath(item, itemConfig.single.denomination, base));
-      }
+      const changes = setPath(item, itemConfig.single.value, toBase(config, currency));
+      if (denominationPath) Object.assign(changes, setPath(item, denominationPath, base));
       return executeUpdate(item, changes, options);
     }
 
