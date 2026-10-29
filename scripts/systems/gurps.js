@@ -159,6 +159,8 @@ export default async function gurps() {
         ? `${inputs.check}${Number.isNumeric(target) ? target : ""}${modifier}`
         : `${inputs.check}${modifier}`;
 
+      const bucketWasEmpty = GURPS.ModifierBucket.currentSum() === 0;
+      GURPS.lastTargetedRoll = null;
       const result = await GURPS.performAction(
         GURPS.parselink(otf).action,
         options.fastForward ? null : actor,
@@ -166,7 +168,8 @@ export default async function gurps() {
       );
 
       const last = GURPS.lastTargetedRoll;
-      if (!last || (result === undefined && !options.fastForward)) {
+      if (!last || result === false) {
+        if (bucketWasEmpty) GURPS.ModifierBucket.clear();
         return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
       }
 

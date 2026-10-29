@@ -15,7 +15,7 @@ export default async function vaesen() {
     }
   }
 
-  const VAESEN_ATTRIBUTES = ["magic", "physique", "precision", "logic", "empathy"];
+  const VAESEN_ATTRIBUTES = ["physique", "precision", "logic", "empathy", "might", "bodyControl", "magic", "manipulation"];
 
   return {
     dataPaths: {
@@ -96,7 +96,7 @@ export default async function vaesen() {
       }
 
       for (const key of VAESEN_ATTRIBUTES) {
-        choices[`attribute.${key}`] = { label: game.i18n.localize(`ATTRIBUTE.${key.toUpperCase()}_ROLL`), group: group.attribute };
+        choices[`attribute.${key}`] = { label: game.i18n.localize(`ATTRIBUTE.${key.replace(/([A-Z])/g, "_$1").toUpperCase()}_ROLL`), group: group.attribute };
       }
 
       class CheckInput extends VaesenCheckInput {
@@ -122,19 +122,22 @@ export default async function vaesen() {
         return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
       }
 
+      if (!actor.system.attribute) throw new Error(`Vaesen actors of type "${actor.type}" cannot perform checks.`);
       const [type, key] = inputs.check.split(".");
+      if (!(type === "skill" ? actor.system.skill?.[key] : actor.system.attribute[key])) {
+        throw new Error(`This Vaesen actor cannot perform "${inputs.check}" checks.`);
+      }
       let pool = 0;
       let name = key;
 
       if (type === "skill") {
         const skill = actor.system.skill[key];
-        if (!skill) throw new Error(`Unknown Vaesen skill: ${key}`);
         const attribute = actor.system.attribute[skill.attribute];
         pool = (skill.value ?? 0) + (attribute?.value ?? 0);
         name = game.i18n.localize(skill.label ?? key);
       } else if (type === "attribute") {
         pool = actor.system.attribute[key]?.value ?? 0;
-        name = game.i18n.localize(`ATTRIBUTE.${key.toUpperCase()}_ROLL`);
+        name = game.i18n.localize(`ATTRIBUTE.${key.replace(/([A-Z])/g, "_$1").toUpperCase()}_ROLL`);
       } else {
         throw new Error(`Unsupported Vaesen check type: ${type}`);
       }

@@ -159,7 +159,6 @@ export default async function castlesAndCrusades() {
       if (!options.silent) {
         await roll.toMessage({
           speaker: ChatMessage.getSpeaker({ actor }),
-          rollMode: game.settings.get("core", "rollMode"),
           flavor: `${game.i18n.localize(`TLGCC.Ability${inputs.check.capitalize()}`)} - CL ${challengeClass}`,
         });
       }

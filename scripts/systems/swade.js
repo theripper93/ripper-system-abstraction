@@ -58,7 +58,7 @@ export default async function swade() {
       type: "",
       subtype: "",
       size: "stats.size",
-      level: "",
+      level: "advances.value",
       role: "",
     },
 
@@ -110,9 +110,8 @@ export default async function swade() {
     },
 
     experience: {
-      current: "advances.value",
+      current: "",
       maximum: "",
-      level: "",
     },
 
     features: {
@@ -160,6 +159,9 @@ export default async function swade() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
+      const isAttribute = inputs.check in CONFIG.SWADE.attributes;
+      if (!actor.system.attributes) throw new Error(`SWADE actors of type "${actor.type}" cannot perform checks.`);
+      if (!isAttribute && ["vehicle", "group"].includes(actor.type)) throw new Error(`SWADE ${actor.type} actors cannot perform "${inputs.check}" skill checks.`);
       const rollOptions = { event: options.event };
       if (inputs.modifier != null) {
         rollOptions.additionalMods = [
@@ -172,7 +174,7 @@ export default async function swade() {
       if (options.silent || options.fastForward) rollOptions.suppressChat = true;
 
       let roll;
-      if (inputs.check in CONFIG.SWADE.attributes) {
+      if (isAttribute) {
         roll = await actor.rollAttribute(inputs.check, rollOptions);
       } else {
         const item = actor.getSingleItemBySwid?.(inputs.check, "skill");
@@ -182,9 +184,10 @@ export default async function swade() {
       }
 
       if (roll && options.fastForward) {
-        await roll.evaluate();
-        roll.targetNumber ??= 4;
-        return normalizeRoll(roll);
+        const evaluated = await new roll.constructor(roll.formula, actor.getRollData()).evaluate();
+        evaluated.targetNumber ??= 4;
+        if (!options.silent) await evaluated.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
+        return normalizeRoll(evaluated);
       }
 
       return normalizeRoll(roll);

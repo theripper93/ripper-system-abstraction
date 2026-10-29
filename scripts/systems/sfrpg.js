@@ -60,6 +60,7 @@ export default async function sfrpg() {
       type: "details.type",
       subtype: "details.subtype",
       size: "traits.size",
+      sizes: { fine: 0.5, diminutive: 0.5, tiny: 0.5, small: 1, medium: 1, large: 2, huge: 3, gargantuan: 4, colossal: 6 },
       level: "details.level.value",
       role: "",
     },
@@ -77,7 +78,13 @@ export default async function sfrpg() {
 
     item: {
       quantity: "quantity",
-      weight: "bulk",
+      weight: (item) => {
+        const bulk = item.system.bulk;
+        if (bulk == null || bulk === "") return null;
+        if (bulk === "L") return 0.1;
+        if (bulk === "-") return 0;
+        return Number.isFinite(Number(bulk)) ? Number(bulk) : null;
+      },
 
       equipped: "equipped",
       attuned: "",
@@ -106,15 +113,22 @@ export default async function sfrpg() {
       },
 
       denominations: {
-        credit: { value: 1 },
-        upb: { value: 1 },
+        credit: { value: 1, label: "SFRPG.Currencies.Credits" },
+        upb: { value: 1, label: "SFRPG.Currencies.UPBs", change: false },
       },
     },
 
     experience: {
       current: "details.xp.value",
       maximum: "details.xp.max",
-      level: "details.level.value",
+    },
+
+    overrides: {
+      Actor: {
+        npc: { experience: { current: "", maximum: "" } },
+        npc2: { experience: { current: "", maximum: "" } },
+        hazard: { experience: { current: "", maximum: "" } },
+      },
     },
 
     features: {
@@ -167,6 +181,10 @@ export default async function sfrpg() {
 
     processCheck: async (actor, inputs, options = {}) => {
       const [type, key] = inputs.check.split(".");
+      const { skills, abilities, attributes } = actor.system;
+      if (!skills && !abilities) throw new Error(`SFRPG actors of type "${actor.type}" cannot perform checks.`);
+      const available = { skill: skills?.[key], ability: abilities?.[key], save: attributes?.[key] }[type];
+      if (!available) throw new Error(`This SFRPG actor cannot perform "${inputs.check}" checks.`);
       const rollOptions = {
         skipUI: options.fastForward ?? false,
         event: options.event,

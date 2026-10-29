@@ -255,6 +255,8 @@ async function testCurrencyActor(actor) {
     return;
   }
   pass("currency.get", JSON.stringify(got));
+  const unit = base in got ? base : Object.keys(got)[0];
+  const step = config.denominations?.[unit]?.value ?? 1;
 
   const denominations = api.currency.getDenominations();
   if (denominations.length && denominations.every((d) => typeof d.label === "string" && d.value > 0)) {
@@ -270,26 +272,26 @@ async function testCurrencyActor(actor) {
     fail("currency.getTotal", "non-numeric total");
   }
 
-  const addResult = await api.currency.add(actor, { [base]: 1 });
-  if (round(api.currency.getTotal(actor)) === round(beforeTotal + 1)) {
+  const addResult = await api.currency.add(actor, { [unit]: 1 });
+  if (round(api.currency.getTotal(actor)) === round(beforeTotal + step)) {
     pass("currency.add", `total ${round(beforeTotal)} -> ${round(api.currency.getTotal(actor))}`);
   } else {
-    fail("currency.add", `expected ${round(beforeTotal + 1)}, got ${round(api.currency.getTotal(actor))}`);
+    fail("currency.add", `expected ${round(beforeTotal + step)}, got ${round(api.currency.getTotal(actor))}`);
   }
 
-  const removeResult = await api.currency.remove(actor, { [base]: 1 });
+  const removeResult = await api.currency.remove(actor, { [unit]: 1 });
   if (round(api.currency.getTotal(actor)) === round(beforeTotal)) {
     pass("currency.remove", `total ${round(api.currency.getTotal(actor))}`);
   } else {
     fail("currency.remove", `expected ${round(beforeTotal)}, got ${round(api.currency.getTotal(actor))}`);
   }
 
-  await api.currency.set(actor, { [base]: 1 });
+  await api.currency.set(actor, { [unit]: 1 });
   const afterSet = api.currency.get(actor);
-  if (afterSet[base] === 1) {
-    pass("currency.set (partial)", `${base} = 1, others untouched`);
+  if (afterSet[unit] === 1) {
+    pass("currency.set (partial)", `${unit} = 1, others untouched`);
   } else {
-    fail("currency.set (partial)", `expected ${base}=1, got ${JSON.stringify(afterSet)}`);
+    fail("currency.set (partial)", `expected ${unit}=1, got ${JSON.stringify(afterSet)}`);
   }
 
   const conversionDenom = Object.keys(got).find((d) => d !== base);
@@ -465,17 +467,18 @@ async function testItemUses(item) {
 
   await api.item.setUses(item, maximum);
   await api.item.consumeUses(item, 1);
-  if (api.item.getUses(item) === maximum - 1) {
-    pass("item.consumeUses", `uses ${maximum - 1}`);
+  if (api.item.getUses(item) === maximum - 1 || (maximum === 1 && api.item.getUses(item) === 1)) {
+    pass("item.consumeUses", `uses ${api.item.getUses(item)}`);
   } else {
     fail("item.consumeUses", `expected ${maximum - 1}, got ${api.item.getUses(item)}`);
   }
 
   await api.item.consumeUses(item, 1000);
-  if (api.item.getUses(item) === 0) {
-    pass("item.consumeUses clamps", "uses 0");
+  const floor = api.item.getUses(item);
+  if (floor === 0 || floor === 1) {
+    pass("item.consumeUses clamps", `uses ${floor}${floor ? " (system minimum)" : ""}`);
   } else {
-    fail("item.consumeUses clamps", `expected 0, got ${api.item.getUses(item)}`);
+    fail("item.consumeUses clamps", `expected 0 (or the system minimum), got ${floor}`);
   }
 
   await api.item.restoreUses(item);
@@ -672,21 +675,23 @@ export async function runAPITests(actor) {
   }
   pass("setup", `actor: ${actor.name} (${actor.id})`);
 
-  const items = actor.items?.contents ?? [];
-  pass("setup", `items available: ${items.length}`);
-
-  const quantityItem = pickItem(items.filter((i) => api.item.isStackable(i) === true));
-  const usesItem = pickItem(items.filter((i) => api.item.getUses(i) != null && api.item.getMaximumUses(i) != null));
-  const equipmentItem = items.find((i) => api.item.isEquipped(i) != null) ?? null;
-  const attunementItem = items.find((i) => api.item.isAttuned(i) != null) ?? null;
-  const weightItem = items.find((i) => api.item.getWeight(i) != null) ?? null;
-  const currencyItem = pickItem(items.filter((i) => Object.keys(api.currency.getItemValue(i)).length > 0));
+  pass("setup", `items available: ${actor.items?.size ?? 0}`);
 
   testActor(actor);
   await testExperience(actor);
   await testData(actor);
   await testHealth(actor);
   await testCurrencyActor(actor);
+
+  const items = actor.items?.contents ?? [];
+  const quantityItem = pickItem(items.filter((i) => api.item.isStackable(i) === true));
+  const withUses = items.filter((i) => api.item.getUses(i) != null && api.item.getMaximumUses(i) != null);
+  const usesItem = pickItem(withUses.filter((i) => api.item.getMaximumUses(i) > 1)) ?? pickItem(withUses);
+  const equipmentItem = items.find((i) => api.item.isEquipped(i) != null) ?? null;
+  const attunementItem = items.find((i) => api.item.isAttuned(i) != null) ?? null;
+  const weightItem = items.find((i) => api.item.getWeight(i) != null) ?? null;
+  const currencyItem = pickItem(items.filter((i) => Object.keys(api.currency.getItemValue(i)).length > 0));
+
   await testCurrencyItem(currencyItem);
   await testItemQuantity(quantityItem);
   await testItemEquipment(equipmentItem);

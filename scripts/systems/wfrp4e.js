@@ -1,6 +1,14 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
+const COINS = { gc: { value: 240, name: "NAME.GC" }, ss: { value: 12, name: "NAME.SS" }, bp: { value: 1, name: "NAME.BP" } };
+
+function findCoin(actor, key) {
+  const money = actor.items.filter((item) => item.type === "money");
+  const name = game.i18n.localize(COINS[key].name).toLowerCase();
+  return money.find((item) => item.name.toLowerCase() === name) ?? money.find((item) => item.system.coinValue?.value === COINS[key].value);
+}
+
 export default async function wfrp4e() {
   for (const packId of ["wfrp4e-core.items", "wfrp4e.basic"]) {
     try {
@@ -99,13 +107,36 @@ export default async function wfrp4e() {
       base: "bp",
 
       actor: {
-        denominations: {},
+        denominations: { gc: "", ss: "", bp: "" },
+        handler: {
+          get: (actor) => {
+            if (!actor.items.some((item) => item.type === "money")) return {};
+            return Object.fromEntries(Object.keys(COINS).map((key) => [key, Number(findCoin(actor, key)?.system.quantity?.value) || 0]));
+          },
+          set: async (actor, amounts) => {
+            const updates = [];
+            const create = [];
+            for (const [key, target] of Object.entries(amounts)) {
+              const coin = findCoin(actor, key);
+              if (coin) {
+                updates.push({ _id: coin.id, "system.quantity.value": target });
+                continue;
+              }
+              const found = await game.wfrp4e.utility.find(game.i18n.localize(COINS[key].name), "money");
+              const source = found?.toObject?.() ?? { name: game.i18n.localize(COINS[key].name), type: "money", system: { coinValue: { value: COINS[key].value } } };
+              foundry.utils.setProperty(source, "system.quantity.value", target);
+              create.push(source);
+            }
+            if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
+            if (create.length) await actor.createEmbeddedDocuments("Item", create);
+          },
+        },
       },
 
       item: {
         single: {
-          value: "coinValue.value",
-          denomination: "bp",
+          value: "",
+          denomination: "",
         },
 
         denominations: {
@@ -116,16 +147,18 @@ export default async function wfrp4e() {
       },
 
       denominations: {
-        bp: { value: 1 },
-        ss: { value: 12 },
-        gc: { value: 240 },
+        bp: { value: 1, label: "NAME.BP" },
+        ss: { value: 12, label: "NAME.SS" },
+        gc: { value: 240, label: "NAME.GC" },
       },
     },
 
     experience: {
-      current: "details.experience.current",
+      current: {
+        get: (actor) => actor.system.details?.experience?.current,
+        set: (actor, value) => ({ "system.details.experience.total": actor.system.details.experience.spent + value }),
+      },
       maximum: "",
-      level: "",
     },
 
     features: {
@@ -177,6 +210,7 @@ export default async function wfrp4e() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
+      if (!actor.system.characteristics || actor.type === "vehicle") throw new Error(`WFRP4e actors of type "${actor.type}" cannot perform checks.`);
       const [type, key] = inputs.check.split(".");
       const context = {
         skipDialog: options.fastForward ?? false,

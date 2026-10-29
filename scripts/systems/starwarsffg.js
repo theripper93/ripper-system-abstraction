@@ -40,14 +40,16 @@ export default async function starwarsffg() {
     },
 
     health: {
-      current: "",
-      maximum: "",
+      current: "stats.wounds.value",
+      maximum: "stats.wounds.max",
       temporary: "",
       minimum: "",
 
       useWounds: true,
       wounds: "stats.wounds.value",
       maximumWounds: "stats.wounds.max",
+
+      invert: true,
     },
 
     item: {
@@ -88,6 +90,19 @@ export default async function starwarsffg() {
       current: "experience.available",
       maximum: "",
       level: "",
+    },
+
+    overrides: {
+      Actor: {
+        vehicle: {
+          health: {
+            current: "stats.hullTrauma.value",
+            maximum: "stats.hullTrauma.max",
+            wounds: "stats.hullTrauma.value",
+            maximumWounds: "stats.hullTrauma.max",
+          },
+        },
+      },
     },
 
     features: {
@@ -139,6 +154,7 @@ export default async function starwarsffg() {
         return { canceled: false, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
       }
 
+      if (!actor.system.characteristics) throw new Error(`Star Wars FFG actors of type "${actor.type}" cannot perform checks.`);
       const [type, key] = inputs.check.split(".");
       const pool = new DicePoolFFG({ difficulty: inputs.difficulty ?? 2 });
 

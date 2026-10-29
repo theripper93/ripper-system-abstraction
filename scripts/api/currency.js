@@ -36,6 +36,10 @@ function toBase(config, amounts) {
   return Math.round(total * 1e6) / 1e6;
 }
 
+function storedDenominationPath(item, spec) {
+  return spec && getPath(item, spec) != null ? spec : null;
+}
+
 function readWallet(actor, config) {
   const handler = actorHandler(config);
   if (handler) return handler.get(actor) ?? {};
@@ -231,24 +235,26 @@ export const currency = {
     if (itemConfig.single?.value) {
       const value = amountOf(getPath(item, itemConfig.single.value));
       if (typeof value !== "number") return {};
-      const denomination = itemConfig.single.denomination
-        ? (getPath(item, itemConfig.single.denomination) || config.base || "")
-        : (config.base ?? "");
+      const spec = itemConfig.single.denomination;
+      const denomination = (storedDenominationPath(item, spec) && getPath(item, spec))
+        || (config.denominations?.[spec] ? spec : config.base ?? "");
       return { [denomination]: value };
     }
 
     const result = {};
     for (const [name, path] of Object.entries(itemConfig.denominations ?? {})) {
-      if (path) result[name] = amountOf(getPath(item, path)) ?? 0;
+      const amount = path ? amountOf(getPath(item, path)) : undefined;
+      if (amount !== undefined) result[name] = amount ?? 0;
     }
     return result;
   },
 
   /**
-   * Set an Item's monetary value. Supports both single-denomination and
-   * multi-denomination representations. For single-denomination systems with
-   * a denomination path, a single supplied denomination is stored as-is;
-   * otherwise the value is converted into the base denomination.
+   * Set an Item's monetary value, replacing the previous one (denominations
+   * not supplied are cleared). Supports both single-denomination and
+   * multi-denomination representations. For single-denomination systems that
+   * store the denomination on the item, a single supplied denomination is
+   * stored as-is; otherwise the value is converted into the base denomination.
    *
    * @param {Item} item
    * @param {Object<string, number>} currency
@@ -262,7 +268,7 @@ export const currency = {
 
     if (itemConfig.single?.value) {
       const entries = Object.entries(currency);
-      const denominationPath = itemConfig.single.denomination;
+      const denominationPath = storedDenominationPath(item, itemConfig.single.denomination);
       if (denominationPath && entries.length === 1 && config.denominations?.[entries[0][0]]) {
         const [[name, amount]] = entries;
         return executeUpdate(item, {
@@ -285,6 +291,9 @@ export const currency = {
         throw unsupported(item, "currency.setItemValue", `item does not support denomination "${name}"`);
       }
       Object.assign(changes, setPath(item, path, amount));
+    }
+    for (const [name, path] of Object.entries(itemConfig.denominations ?? {})) {
+      if (path && !(name in currency) && getPath(item, path)) Object.assign(changes, setPath(item, path, 0));
     }
     return executeUpdate(item, changes, options);
   },

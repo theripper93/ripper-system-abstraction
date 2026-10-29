@@ -110,9 +110,8 @@ export default async function pbta() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
-      if (!(inputs.check in (actor.system.stats ?? {}))) {
-        throw new Error(`Unknown PbtA stat: ${inputs.check}`);
-      }
+      if (!Object.keys(actor.system.stats ?? {}).length) throw new Error(`PbtA actors of type "${actor.type}" cannot perform checks.`);
+      if (!(inputs.check in actor.system.stats)) throw new Error(`This PbtA actor cannot perform "${inputs.check}" checks.`);
 
       const roll = new CONFIG.Dice.RollPbtA(
         actor._getStatFormula(inputs.check),

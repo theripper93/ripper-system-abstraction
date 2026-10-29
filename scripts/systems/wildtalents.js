@@ -1,3 +1,5 @@
+import { captureRollMessage } from "./_shared.js";
+
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
@@ -132,18 +134,23 @@ export default async function wildtalents() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
-      const dice = actor.system.stats?.[inputs.check];
-      if (!dice) throw new Error(`Unknown Wild Talents stat: ${inputs.check}`);
+      if (!actor.system.stats) throw new Error(`Wild Talents actors of type "${actor.type}" cannot perform checks.`);
+      const dice = actor.system.stats[inputs.check];
+      if (!dice) throw new Error(`This Wild Talents actor cannot perform "${inputs.check}" checks.`);
 
-      const message = await game.wildtalents.quickRoll(dice, {
-        flavor: game.i18n.localize(WILD_TALENTS_STATS[inputs.check]),
-        minHeight: inputs.difficulty ?? 1,
-        speaker: { actor: actor.id },
-      });
+      const message = await captureRollMessage(async () => {
+        await game.wildtalents.quickRoll(dice, {
+          flavor: game.i18n.localize(WILD_TALENTS_STATS[inputs.check]),
+          minHeight: inputs.difficulty ?? 1,
+          speaker: { actor: actor.id },
+        });
+      }, options);
 
       let success = null;
+      let result = null;
       try {
         const data = JSON.parse(message.rolls[0].terms[0].flavor);
+        result = Math.max(0, ...(data.sets ?? []).map((set) => set.length));
         const minWidth = data.minWidth ?? 2;
         const minHeight = data.minHeight ?? 1;
         success = (data.sets ?? []).some((set) => {
@@ -156,7 +163,7 @@ export default async function wildtalents() {
 
       return {
         canceled: false,
-        result: null,
+        result,
         target: inputs.difficulty ?? 1,
         success,
         levelOfSuccess: success == null ? null : success ? 100 : 0,

@@ -153,6 +153,7 @@ export default async function shadowdark() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
+      if (typeof actor.system.rollStatCheck !== "function") throw new Error(`Shadowdark actors of type "${actor.type}" cannot perform checks.`);
       const config = {
         skipPrompt: options.fastForward ?? false,
         event: options.event,

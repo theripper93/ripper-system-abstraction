@@ -201,8 +201,9 @@
  * 1. Single denomination
  *
  *    Example:
- *      value = 5
- *      denomination = "gp"
+ *      value = "price.value"
+ *      denomination = "price.denomination" (a path the item holds), or a
+ *      fixed denomination id such as "gp" when every item uses the same one
  *
  * 2. Multiple denominations
  *

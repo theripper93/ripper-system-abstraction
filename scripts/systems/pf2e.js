@@ -31,6 +31,11 @@ export default async function pf2e() {
 
   const DEGREE_TO_LEVEL = [0, 33, 66, 100];
 
+  const price = (denomination) => ({
+    get: (item) => (item.isOfType?.("treasure") && item.isCurrency ? undefined : item.system.price?.value?.[denomination]),
+    set: (item, value) => ({ [`system.price.value.${denomination}`]: value }),
+  });
+
   function normalizeRoll(roll, dc) {
     if (!roll) {
       return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
@@ -54,8 +59,10 @@ export default async function pf2e() {
     dataPaths: {
     actor: {
       type: "traits.value",
+      typeChoices: () => CONFIG.PF2E.creatureTraits,
       subtype: "",
       size: "traits.size.value",
+      sizes: { tiny: 0.5, sm: 1, med: 1, lg: 2, huge: 3, grg: 4 },
       level: "details.level.value",
       role: "",
     },
@@ -75,11 +82,21 @@ export default async function pf2e() {
       quantity: "quantity",
       weight: "bulk.value",
 
-      equipped: "equipped.carryType",
+      equipped: {
+        get: (item) => item.isEquipped,
+        set: (item, value) => {
+          if (!value) return { "system.equipped.carryType": "worn", "system.equipped.handsHeld": 0, "system.equipped.inSlot": false };
+          const usage = item.system.usage;
+          if (usage?.type === "held") return { "system.equipped.carryType": "held", "system.equipped.handsHeld": usage.hands ?? 1 };
+          return { "system.equipped.carryType": "worn", ...(usage?.where ? { "system.equipped.inSlot": true } : {}) };
+        },
+      },
+      equippable: (item) => item.isOfType?.("physical") && item.system.usage?.type !== "carried" && !item.actor?.isOfType("loot", "party"),
       attuned: "equipped.invested",
+      attunable: (item) => item.system.equipped?.invested != null,
 
-      uses: "",
-      maximumUses: "",
+      uses: "uses.value",
+      maximumUses: "uses.max",
     },
 
     currency: {
@@ -94,8 +111,9 @@ export default async function pf2e() {
         },
         handler: {
           get: (actor) => {
-            const coins = actor.inventory?.currency;
-            return coins ? { cp: coins.cp, sp: coins.sp, gp: coins.gp, pp: coins.pp } : {};
+            if (!actor.allowedItemTypes?.includes("physical")) return {};
+            const coins = actor.inventory.currency;
+            return { cp: coins.cp, sp: coins.sp, gp: coins.gp, pp: coins.pp };
           },
           set: async (actor, amounts) => {
             const coins = actor.inventory.currency;
@@ -118,12 +136,7 @@ export default async function pf2e() {
           denomination: "",
         },
 
-        denominations: {
-          cp: "price.value.cp",
-          sp: "price.value.sp",
-          gp: "price.value.gp",
-          pp: "price.value.pp",
-        },
+        denominations: { cp: price("cp"), sp: price("sp"), gp: price("gp"), pp: price("pp") },
       },
 
       denominations: {
@@ -137,7 +150,6 @@ export default async function pf2e() {
     experience: {
       current: "details.xp.value",
       maximum: "details.xp.max",
-      level: "details.level.value",
     },
 
     features: {
@@ -147,6 +159,7 @@ export default async function pf2e() {
       supportsCurrency: true,
       supportsWeight: true,
       supportsEquipment: true,
+      supportsAttunement: true,
     },
     },
     testsInterface: {
@@ -189,20 +202,13 @@ export default async function pf2e() {
       };
       if (inputs.dc != null) rollOptions.dc = inputs.dc;
 
-      let roll;
-      switch (type) {
-        case "skill":
-        case "save":
-          roll = await actor.getStatistic(key)?.roll(rollOptions);
-          break;
-
-        case "perception":
-          roll = await actor.perception?.roll(rollOptions);
-          break;
-
-        default:
-          throw new Error(`Unsupported PF2E check type: ${type}`);
+      if (!["skill", "save", "perception"].includes(type)) throw new Error(`Unsupported PF2E check type: ${type}`);
+      const statistic = type === "perception" ? actor.perception : actor.getStatistic?.(key);
+      if (!statistic) {
+        if (!actor.perception && !actor.saves) throw new Error(`PF2E actors of type "${actor.type}" cannot perform checks.`);
+        throw new Error(`This PF2E actor cannot perform "${inputs.check}" checks.`);
       }
+      const roll = await statistic.roll(rollOptions);
 
       return normalizeRoll(roll, inputs.dc);
     },

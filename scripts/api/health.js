@@ -54,7 +54,7 @@ function effectiveCurrent(actor, dp) {
   if (value == null) return null;
   if (isInverted(dp)) {
     const maximum = numeric(maximumValue(actor, dp));
-    return maximum != null ? maximum - value : value;
+    return maximum != null ? Math.max(0, maximum - value) : value;
   }
   return value;
 }

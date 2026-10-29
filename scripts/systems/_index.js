@@ -17,19 +17,14 @@ import dsa5 from "./dsa5.js";
 import earthdawn4e from "./earthdawn4e.js";
 import exaltedthird from "./exaltedthird.js";
 import fallout from "./fallout.js";
-import genesys from "./genesys.js";
 import gurps from "./gurps.js";
-import icon from "./icon.js";
 import impmal from "./impmal.js";
 import pbta from "./pbta.js";
-import pf1 from "./pf1.js";
 import pf2e from "./pf2e.js";
 import sfrpg from "./sfrpg.js";
 import shadowdark from "./shadowdark.js";
 import starwarsffg from "./starwarsffg.js";
-import sw5e from "./sw5e.js";
 import swade from "./swade.js";
-import symbaroum from "./symbaroum.js";
 import vaesen from "./vaesen.js";
 import wfrp4e from "./wfrp4e.js";
 import wildtalents from "./wildtalents.js";
@@ -55,19 +50,14 @@ const factories = {
   earthdawn4e,
   exaltedthird,
   fallout,
-  genesys,
   gurps,
-  icon,
   impmal,
   pbta,
-  pf1,
   pf2e,
   sfrpg,
   shadowdark,
   starwarsffg,
-  sw5e,
   swade,
-  symbaroum,
   vaesen,
   wfrp4e,
   wildtalents,
