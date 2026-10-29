@@ -193,6 +193,9 @@ export default async function a5e() {
         throw new Error(`A5E actors of type "${actor.type}" cannot perform checks.`);
       }
 
+      const unsupported = type === "skill" ? !actor.system.skills?.[key] : type === "save" && key === "death" && !actor.system.attributes?.death;
+      if (unsupported) throw new Error(`This A5E actor cannot perform "${inputs.check}" checks.`);
+
       let message;
       switch (type) {
         case "skill":

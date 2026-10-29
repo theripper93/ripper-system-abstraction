@@ -153,6 +153,8 @@ export default async function wfrp4e() {
       },
     },
 
+    updateOptions: { skipExperienceChecks: true },
+
     experience: {
       current: {
         get: (actor) => actor.system.details?.experience?.current,

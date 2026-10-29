@@ -247,6 +247,10 @@
  *   `(document, changes) => Promise` awaited after every write the API makes,
  *   for systems that mirror document data elsewhere and need it synced.
  *
+ * updateOptions (optional object):
+ *   Options passed to every document update the API makes, e.g. flags a
+ *   system reads to skip its own prompts.
+ *
  * ---------------------------------------------------------------------------
  * FEATURES
  * ---------------------------------------------------------------------------

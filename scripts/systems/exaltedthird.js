@@ -156,6 +156,7 @@ export default async function exaltedthird() {
       const isNpc = actor.type === "npc";
       if (kind === "pool" && !isNpc) throw new Error(`Exalted characters cannot perform "${key}" pool checks.`);
       if (kind === "ability" && isNpc) throw new Error(`Exalted NPCs cannot perform "${key}" ability checks; they roll pools.`);
+      if (isNpc && actor.system.pools && !actor.system.pools[key]) throw new Error(`This Exalted NPC cannot perform "${inputs.check}" checks.`);
 
       const form = new RollForm(actor, {}, {}, {
         rollType: "ability",

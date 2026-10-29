@@ -175,7 +175,8 @@ export default async function CoC7() {
     }
 
     if (typeof value !== "number") {
-      throw new Error(`Unknown CoC7 ${type}: ${key}`);
+      if (!actor.system.characteristics) throw new Error(`CoC7 actors of type "${actor.type}" cannot perform checks.`);
+      throw new Error(`This CoC7 actor cannot perform "${inputs.check}" checks.`);
     }
 
     const regular = value;

@@ -103,6 +103,8 @@ export default async function impmal() {
       },
     },
 
+    updateOptions: { skipXPReason: true },
+
     experience: {
       current: "xp.total",
       maximum: "",
@@ -153,7 +155,7 @@ export default async function impmal() {
     },
 
     processCheck: async (actor, inputs, options = {}) => {
-      if (!actor.system.characteristics && actor.type !== "vehicle") throw new Error(`Imperium Maledictum actors of type "${actor.type}" cannot perform checks.`);
+      if (!actor.system.characteristics || actor.type === "vehicle") throw new Error(`Imperium Maledictum actors of type "${actor.type}" cannot perform checks.`);
       const [type, key] = inputs.check.split(".");
       const context = {
         skipDialog: options.fastForward ?? false,

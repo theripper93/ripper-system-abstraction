@@ -86,8 +86,9 @@ export function setPath(document, spec, value) {
  * Central update executor. When `options.update === false` the raw changes
  * payload is returned synchronously without touching the document (for
  * batch-building); otherwise the changes are applied via the document's
- * update method and its promise is returned. An adapter's optional
- * `afterUpdate(document, changes)` is awaited before the promise resolves.
+ * update method, with the adapter's optional `updateOptions`, and its promise is
+ * returned. An adapter's optional `afterUpdate(document, changes)` is awaited
+ * before the promise resolves.
  *
  * @param {Document} document
  * @param {Object<string, *>} changes
@@ -98,9 +99,9 @@ export function setPath(document, spec, value) {
 export function executeUpdate(document, changes, options = {}) {
   if (options.update === false) return changes;
   if (!Object.keys(changes).length) return Promise.resolve(document);
-  const afterUpdate = getDataPaths()?.afterUpdate;
-  if (typeof afterUpdate !== "function") return document.update(changes);
-  return document.update(changes).then(async (result) => {
+  const { afterUpdate, updateOptions } = getDataPaths() ?? {};
+  if (typeof afterUpdate !== "function") return document.update(changes, { ...updateOptions });
+  return document.update(changes, { ...updateOptions }).then(async (result) => {
     await afterUpdate(document, changes);
     return result;
   });

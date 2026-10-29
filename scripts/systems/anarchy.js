@@ -174,13 +174,13 @@ export default async function anarchy() {
 
       if (type === "attribute") {
         if (!payload.attributes.includes(key)) {
-          throw new Error(`Anarchy actors of type "${actor.type}" cannot perform checks with ${key}.`);
+          throw new Error(`This Anarchy actor cannot perform "${inputs.check}" checks.`);
         }
         payload.mode = "attribute";
         payload.attribute1 = key;
       } else if (type === "skill") {
         const skill = actor.items.find((i) => i.type === "skill" && i.system.code === key);
-        if (!skill) throw new Error(`${actor.name} does not have the Anarchy skill "${key}".`);
+        if (!skill) throw new Error(`This Anarchy actor cannot perform "${inputs.check}" checks.`);
         payload.mode = "skill";
         payload.skill = skill;
         payload.attribute1 = skill.system.attribute ?? "agility";

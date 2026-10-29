@@ -86,6 +86,7 @@ export default async function dnd5e() {
 
     item: {
       quantity: "quantity",
+      stackable: (item) => item.type !== "container",
       weight: "weight.value",
 
       equipped: "equipped",
@@ -202,6 +203,9 @@ export default async function dnd5e() {
       const config = { event: options.event };
       const dialog = options.fastForward ? { configure: false } : {};
       const message = options.silent ? { create: false } : {};
+
+      const unsupported = type === "skill" ? !actor.system.skills?.[key] : type === "tool" ? !actor.system.tools : type === "save" ? (key === "death" ? !actor.system.attributes?.death : !actor.system.abilities) : false;
+      if (unsupported) throw new Error(`This D&D 5e actor cannot perform "${inputs.check}" checks.`);
 
       let rolls;
       switch (type) {
