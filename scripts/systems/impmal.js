@@ -165,18 +165,32 @@ export default async function impmal() {
       };
       if (inputs.modifier != null) context.fields.modifier = inputs.modifier;
 
+      const resolveOnClose = Hooks.on("renderApplicationV2", (app) => {
+        if (typeof app.resolve !== "function") return;
+        const close = app.close.bind(app);
+        app.close = (...args) => {
+          const result = close(...args);
+          app.resolve();
+          return result;
+        };
+      });
+
       let test;
-      switch (type) {
-        case "char":
-          test = await actor.setupCharacteristicTest(key, context);
-          break;
+      try {
+        switch (type) {
+          case "char":
+            test = await actor.setupCharacteristicTest(key, context);
+            break;
 
-        case "skill":
-          test = await actor.setupSkillTest({ key }, context);
-          break;
+          case "skill":
+            test = await actor.setupSkillTest({ key }, context);
+            break;
 
-        default:
-          throw new Error(`Unsupported Imperium Maledictum check type: ${type}`);
+          default:
+            throw new Error(`Unsupported Imperium Maledictum check type: ${type}`);
+        }
+      } finally {
+        Hooks.off("renderApplicationV2", resolveOnClose);
       }
 
       return normalizeTest(test);

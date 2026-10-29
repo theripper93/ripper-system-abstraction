@@ -30,20 +30,25 @@ export default async function anarchy() {
   }
 
   async function rollWithDialog(actor, type, key, payload) {
-    let dialogRoll = null;
+    let dialog = null;
     let closed = false;
-    const renderHook = Hooks.on("renderRollDialog", (app) => { dialogRoll ??= app.roll; });
-    const closeHook = Hooks.on("closeRollDialog", () => { closed = true; });
+    const onRender = (app) => { if (!dialog && app.roll !== undefined) dialog = app; };
+    const onClose = (app) => { if (app === dialog) closed = true; };
+    const hooks = [
+      ["renderApplication", Hooks.on("renderApplication", onRender)],
+      ["renderApplicationV2", Hooks.on("renderApplicationV2", onRender)],
+      ["closeApplication", Hooks.on("closeApplication", onClose)],
+      ["closeApplicationV2", Hooks.on("closeApplicationV2", onClose)],
+    ];
     try {
       if (type === "attribute") await actor.rollAttribute(key);
       else await actor.rollSkill(payload.skill);
-      while (!closed) await new Promise((r) => setTimeout(r, 100));
-      for (let i = 0; i < 30 && !dialogRoll?.roll; i++) await new Promise((r) => setTimeout(r, 100));
+      for (let i = 0; !closed && (dialog || i < 50); i++) await new Promise((r) => setTimeout(r, 100));
+      for (let i = 0; i < 30 && dialog && !dialog.roll?.roll; i++) await new Promise((r) => setTimeout(r, 100));
     } finally {
-      Hooks.off("renderRollDialog", renderHook);
-      Hooks.off("closeRollDialog", closeHook);
+      for (const [name, id] of hooks) Hooks.off(name, id);
     }
-    return dialogRoll;
+    return dialog?.roll ?? null;
   }
 
   return {

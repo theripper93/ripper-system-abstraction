@@ -86,6 +86,9 @@ export function parse(value) {
   return inputs;
 }
 
+const LATE_ROLL_MESSAGE_MS = 1000;
+let activeSilentChecks = 0;
+
 /**
  * Perform a check for the given actor using a serialized inputs string.
  *
@@ -96,7 +99,8 @@ export function parse(value) {
  * @param {string} value            The serialized inputs string.
  * @param {Object} [options]        Options for the check.
  * @param {boolean} [options.fastForward]  Whether to skip the roll dialog if possible.
- * @param {boolean} [options.silent]       Whether to suppress chat output for the check.
+ * @param {boolean} [options.silent]       Whether to suppress chat output for the check, including
+ *   roll messages the system posts shortly after the check resolves.
  * @param {Event} [options.event]    An optional originating event.
  * @returns {Promise<{canceled: boolean, result: number|null, target: number|null,
  *   success: boolean|null, levelOfSuccess: number|null, criticalSuccess: boolean,
@@ -109,16 +113,21 @@ export async function processCheck(actor, value, options = {}) {
 
   const suppressedMessages = [];
   options = { ...options, suppressedMessages };
+  let settled = false;
   const hook = (message) => {
     if ((message.author?.id ?? message.author) !== game.user.id) return;
+    if (settled && (activeSilentChecks > 0 || !message.rolls?.length)) return;
     suppressedMessages.push(message);
     return false;
   };
   Hooks.on("preCreateChatMessage", hook);
+  activeSilentChecks++;
   try {
     return await iface.processCheck(actor, inputs, options);
   } finally {
-    Hooks.off("preCreateChatMessage", hook);
+    activeSilentChecks--;
+    settled = true;
+    setTimeout(() => Hooks.off("preCreateChatMessage", hook), LATE_ROLL_MESSAGE_MS);
   }
 }
 

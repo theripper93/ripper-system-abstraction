@@ -71,6 +71,11 @@ export default async function wfrp4e() {
     };
   }
 
+  const price = (denomination) => ({
+    get: (item) => (item.type === "cargo" ? undefined : item.system.price?.[denomination]),
+    set: (item, value) => ({ [`system.price.${denomination}`]: value }),
+  });
+
   return {
     dataPaths: {
     actor: {
@@ -139,11 +144,7 @@ export default async function wfrp4e() {
           denomination: "",
         },
 
-        denominations: {
-          gc: "price.gc",
-          ss: "price.ss",
-          bp: "price.bp",
-        },
+        denominations: { gc: price("gc"), ss: price("ss"), bp: price("bp") },
       },
 
       denominations: {

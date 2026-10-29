@@ -113,7 +113,10 @@ export default async function dnd5e() {
 
       item: {
         single: {
-          value: "price.value",
+          value: {
+            get: (item) => (item.type === "facility" && item.system.type?.value === "basic" ? undefined : item.system.price?.value),
+            set: (item, value) => ({ "system.price.value": value }),
+          },
           denomination: "price.denomination",
         },
 

@@ -105,7 +105,14 @@ export default async function crucible() {
 
       item: {
         single: {
-          value: "price",
+          value: {
+            get: (item) => item.system.price,
+            set: (item, value) => {
+              const rarity = item.system.rarity ?? 0;
+              const base = rarity < 0 ? value * Math.abs(rarity - 1) : value / Math.pow(rarity + 1, 3);
+              return { "system.price": Math.round(base) };
+            },
+          },
           denomination: "",
         },
 

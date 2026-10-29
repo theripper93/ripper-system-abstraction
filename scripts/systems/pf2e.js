@@ -91,7 +91,7 @@ export default async function pf2e() {
           return { "system.equipped.carryType": "worn", ...(usage?.where ? { "system.equipped.inSlot": true } : {}) };
         },
       },
-      equippable: (item) => item.isOfType?.("physical") && item.system.usage?.type !== "carried" && !item.actor?.isOfType("loot", "party"),
+      equippable: (item) => !!item.actor && item.isOfType?.("physical") && item.system.usage?.type !== "carried" && !item.actor?.isOfType("loot", "party"),
       attuned: "equipped.invested",
       attunable: (item) => item.system.equipped?.invested != null,
 
