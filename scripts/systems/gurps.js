@@ -97,9 +97,7 @@ export default async function gurps() {
         denominations: {},
       },
 
-      denominations: {
-        "$": { value: 1 },
-      },
+      denominations: {},
     },
 
     experience: {

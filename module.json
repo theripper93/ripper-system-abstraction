@@ -1,6 +1,6 @@
 {
-  "title": "Ripper System Abstraction",
-  "description": "desc",
+  "title": "TheRipper93's System Abstraction",
+  "description": "Library module to abstract system-specific implementations",
   "id": "ripper-system-abstraction",
   "version": "1.0",
   "authors": [
@@ -29,13 +29,7 @@
   "manifest": "https://github.com/theripper93/ripper-system-abstraction/releases/latest/download/module.json",
   "download": "",
   "relationships": {
-    "requires": [
-      {
-        "id": "lib-wrapper",
-        "type": "module",
-        "compatibility": {}
-      }
-    ]
+    "requires": []
   },
   "compatibility": {
     "minimum": "14",
