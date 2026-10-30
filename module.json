@@ -2,7 +2,7 @@
   "title": "TheRipper93's System Abstraction",
   "description": "Library module to abstract system-specific implementations",
   "id": "ripper-system-abstraction",
-  "version": "1.0",
+  "version": "1.0.0",
   "authors": [
     {
       "name": "theripper93",
@@ -21,9 +21,7 @@
   "esmodules": [
     "index.js"
   ],
-  "styles": [
-    "styles/module.css"
-  ],
+  "styles": [],
   "packs": [],
   "url": "https://github.com/theripper93/ripper-system-abstraction",
   "manifest": "https://github.com/theripper93/ripper-system-abstraction/releases/latest/download/module.json",
