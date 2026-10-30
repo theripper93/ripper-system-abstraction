@@ -29,7 +29,6 @@ Hooks.on("init", () => {
 });
 
 Hooks.on("ready", async () => {
-    showWelcome();
     initConfig();
     await loadSystem();
 });
