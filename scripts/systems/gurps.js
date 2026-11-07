@@ -89,6 +89,27 @@ export default async function gurps() {
 
       uses: usesField("uses"),
       maximumUses: usesField("maxuses"),
+
+      values: {
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: (item) => item.type === "equipment",
+          path: usesField("maxuses"),
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.type === "equipment",
+          path: "eqt.weight",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.type === "equipment",
+          path: costField,
+        },
+      },
     },
 
     currency: {

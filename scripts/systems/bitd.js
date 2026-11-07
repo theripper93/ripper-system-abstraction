@@ -30,6 +30,21 @@ export default async function bitd() {
     return rolled;
   }
 
+  const HARM_SLOTS = ["lesser.0", "lesser.1", "moderate.0", "moderate.1", "severe"];
+  const harmSlots = (actor) => HARM_SLOTS.map((slot) => foundry.utils.getProperty(actor.system.harm ?? {}, slot) || "");
+  const setHarm = (actor, value) => {
+    const label = game.i18n.localize("BITD.Scoundrel.Harms.Harm");
+    const slots = harmSlots(actor);
+    let delta = Math.max(0, Math.min(HARM_SLOTS.length, value)) - slots.filter(Boolean).length;
+    for (let i = 0; delta > 0 && i < slots.length; i++) if (!slots[i]) { slots[i] = label; delta--; }
+    for (let i = slots.length - 1; delta < 0 && i >= 0; i--) if (slots[i]) { slots[i] = ""; delta++; }
+    return {
+      "system.harm.lesser": slots.slice(0, 2).filter(Boolean),
+      "system.harm.moderate": slots.slice(2, 4).filter(Boolean),
+      "system.harm.severe": slots[4],
+    };
+  };
+
   return {
     dataPaths: {
     actor: {
@@ -46,8 +61,12 @@ export default async function bitd() {
       temporary: "",
       minimum: "",
 
-      wounds: "",
-      maximumWounds: "",
+      wounds: {
+        get: (actor) => (actor.system.harm ? harmSlots(actor).filter(Boolean).length : null),
+        set: (actor, value) => setHarm(actor, value),
+      },
+      maximumWounds: (actor) => (actor.system.harm ? HARM_SLOTS.length : null),
+      primary: "wounds",
     },
 
     item: {
@@ -57,8 +76,26 @@ export default async function bitd() {
       equipped: "equipped",
       attuned: "",
 
-      uses: "",
-      maximumUses: "",
+      usesSpent: {
+        get: (item) => item.system.uses?.used ?? 0,
+        set: (item, value) => ({ "system.uses.used": value > 0 ? value : null }),
+      },
+      maximumUses: "uses.max",
+
+      values: {
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.type === "tool",
+          path: "loadout",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.type === "upgrade",
+          path: "price",
+        },
+      },
     },
 
     currency: {
@@ -92,7 +129,7 @@ export default async function bitd() {
     features: {
       supportsHealth: false,
       supportsTemporaryHealth: false,
-      supportsWounds: false,
+      supportsWounds: true,
       supportsCurrency: true,
       supportsWeight: true,
       supportsEquipment: true,

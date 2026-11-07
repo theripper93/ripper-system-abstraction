@@ -68,6 +68,39 @@ export default async function CoC7() {
 
     uses: "ammo",
     maximumUses: "bullets",
+
+    values: {
+      damage: {
+        label: "ripper-system-abstraction.item.values.damage",
+        type: "formula",
+        applies: (item) => item.type === "weapon",
+        path: "range.normal.damage",
+      },
+      range: {
+        label: "ripper-system-abstraction.item.values.range",
+        type: "formula",
+        applies: (item) => item.type === "weapon" && (!!item.system.properties?.rngd || !!item.system.range?.normal?.value),
+        path: "range.normal.value",
+      },
+      malfunction: {
+        label: "ripper-system-abstraction.item.values.malfunction",
+        type: "number",
+        applies: (item) => item.type === "weapon" && item.system.malfunction != null,
+        path: "malfunction",
+      },
+      maximumUses: {
+        label: "ripper-system-abstraction.item.values.maximumUses",
+        type: "number",
+        applies: (item) => item.type === "weapon" && item.system.bullets != null,
+        path: "bullets",
+      },
+      weight: {
+        label: "ripper-system-abstraction.item.values.weight",
+        type: "number",
+        applies: (item) => item.type === "item",
+        path: "weight",
+      },
+    },
   },
 
   currency: {
@@ -79,8 +112,11 @@ export default async function CoC7() {
 
     item: {
       single: {
-        value: "",
-        denomination: "",
+        value: {
+          get: (item) => (item.system.price ? item.system.price[game.settings.get("CoC7", "worldEra")] ?? null : null),
+          set: (item, value) => ({ [`system.price.${game.settings.get("CoC7", "worldEra")}`]: value }),
+        },
+        denomination: "cash",
       },
 
       denominations: {},

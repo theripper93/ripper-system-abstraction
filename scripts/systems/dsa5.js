@@ -5,6 +5,7 @@ const COIN_BY_VALUE = { 10: "dukaten", 1: "silbertaler", 0.1: "heller", 0.01: "k
 const COIN_LABELS = { dukaten: "Money-D", silbertaler: "Money-S", heller: "Money-H", kreuzer: "Money-K" };
 
 export default async function dsa5() {
+  const isWeapon = (item) => item.type === "meleeweapon" || item.type === "rangeweapon";
   try {
     const pack = game.packs?.get?.(game.i18n.lang === "de" ? "dsa5.skills" : "dsa5.skillsen");
     if (pack && !pack.indexed) await pack.getIndex();
@@ -63,8 +64,53 @@ export default async function dsa5() {
       equipped: "worn.value",
       attuned: "",
 
-      uses: "",
-      maximumUses: "",
+      uses: "charges",
+      maximumUses: "maxCharges",
+
+      values: {
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "formula",
+          applies: isWeapon,
+          path: "damage.value",
+        },
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: (item) => item.type === "meleeweapon",
+          path: "atmod.value",
+        },
+        parry: {
+          label: "ripper-system-abstraction.item.values.parry",
+          type: "number",
+          applies: (item) => item.type === "meleeweapon",
+          path: "pamod.value",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "protection.value",
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: (item) => item.type === "consumable",
+          path: "maxCharges",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.weight?.value !== undefined,
+          path: "weight.value",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.price?.value !== undefined,
+          path: "price.value",
+        },
+      },
     },
 
     currency: {
@@ -86,7 +132,8 @@ export default async function dsa5() {
             const updates = [];
             const create = [];
             for (const [key, target] of Object.entries(amounts)) {
-              const coin = actor.items.find((item) => item.type === "money" && COIN_BY_VALUE[item.system.price?.value] === key);
+              const [coin, ...duplicates] = actor.items.filter((item) => item.type === "money" && COIN_BY_VALUE[item.system.price?.value] === key);
+              for (const duplicate of duplicates) updates.push({ _id: duplicate.id, "system.quantity.value": 0 });
               if (!coin) {
                 const value = Number(Object.keys(COIN_BY_VALUE).find((v) => COIN_BY_VALUE[v] === key));
                 create.push({ name: game.i18n.localize(COIN_LABELS[key]), type: "money", img: `systems/dsa5/icons/${COIN_LABELS[key]}.webp`, system: { price: { value }, quantity: { value: target } } });

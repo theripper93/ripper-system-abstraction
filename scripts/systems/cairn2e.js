@@ -8,6 +8,15 @@ export default async function cairn2e() {
   const { goldTotal } = await import(/* webpackIgnore: true */ foundry.utils.getRoute("systems/cairn2e/module/coin-rules.js"));
 
   const CAIRN_ABILITIES = ["STR", "DEX", "WIL"];
+  // Gear damage is one of these dice, and armor is 0-3 (both validated by the data model).
+  const DAMAGE_DICE = [4, 6, 8, 10, 12];
+  const isGear = (item) => item.type === "gear";
+  // Snap a die size to a valid die, rounding away from the current one (d6 + 1 gives d8, d8 - 1 gives d6).
+  const toDamageDie = (value, current) => {
+    const size = Number(value) || 0;
+    const valid = size < current ? DAMAGE_DICE.findLast((s) => s <= size) ?? DAMAGE_DICE[0] : DAMAGE_DICE.find((s) => s >= size) ?? DAMAGE_DICE.at(-1);
+    return `d${valid}`;
+  };
 
   function savePasses(face, target) {
     if (face === 1) return true;
@@ -45,6 +54,46 @@ export default async function cairn2e() {
 
       uses: "uses.value",
       maximumUses: "uses.max",
+
+      values: {
+        damageDie: {
+          label: "ripper-system-abstraction.item.values.damageDie",
+          type: "number",
+          applies: (item) => isGear(item) && !!item.system.damage,
+          path: {
+            get: (item) => Number(item.system.damage.slice(1)),
+            set: (item, value) => ({ "system.damage": toDamageDie(value, Number(item.system.damage.slice(1))) }),
+          },
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => isGear(item) && item.system.armor > 0,
+          path: {
+            get: (item) => item.system.armor,
+            set: (item, value) => ({ "system.armor": Math.clamp(Math.round(Number(value) || 0), 0, 3) }),
+          },
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: (item) => isGear(item) && !(item.system.capacity > 0),
+          path: "uses.max",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          // A scroll weighs nothing whatever its stored slots (GearData#prepareBaseData).
+          applies: (item) => isGear(item) && item.system.magic !== "scroll",
+          path: "slots",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: isGear,
+          path: "cost",
+        },
+      },
     },
 
     currency: {

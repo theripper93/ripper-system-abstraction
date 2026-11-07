@@ -36,6 +36,18 @@ export default async function pf2e() {
     set: (item, value) => ({ [`system.price.value.${denomination}`]: value }),
   });
 
+  const sourceValue = (path) => ({
+    get: (item) => foundry.utils.getProperty(item._source.system, path),
+    set: (item, value) => ({ [`system.${path}`]: value }),
+  });
+  const isPhysical = (item) => item.isOfType?.("physical") ?? false;
+
+  function rollTwice(options) {
+    if (options.advantage && !options.disadvantage) return "keep-higher";
+    if (options.disadvantage && !options.advantage) return "keep-lower";
+    return undefined;
+  }
+
   function normalizeRoll(roll, dc) {
     if (!roll) {
       return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
@@ -180,6 +192,93 @@ export default async function pf2e() {
       uses: "uses.value",
       maximumUses: "uses.max",
 
+      values: {
+        magicalBonus: {
+          label: "ripper-system-abstraction.item.values.magicalBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon" || item.type === "armor",
+          path: sourceValue("runes.potency"),
+        },
+        strikingRune: {
+          label: "ripper-system-abstraction.item.values.strikingRune",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: sourceValue("runes.striking"),
+        },
+        resilientRune: {
+          label: "ripper-system-abstraction.item.values.resilientRune",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: sourceValue("runes.resilient"),
+        },
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: sourceValue("bonus.value"),
+        },
+        damageDice: {
+          label: "ripper-system-abstraction.item.values.damageDice",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: sourceValue("damage.dice"),
+        },
+        damageDie: {
+          label: "ripper-system-abstraction.item.values.damageDie",
+          type: "number",
+          applies: (item) => item.type === "weapon" && !!item._source.system.damage?.die,
+          path: {
+            get: (item) => Number(item._source.system.damage.die.slice(1)),
+            set: (item, value) => ({ "system.damage.die": `d${value}` }),
+          },
+        },
+        range: {
+          label: "ripper-system-abstraction.item.values.range",
+          type: "number",
+          applies: (item) => item.type === "weapon" && item._source.system.range != null,
+          path: sourceValue("range"),
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor" || item.type === "shield",
+          path: sourceValue("acBonus"),
+        },
+        hardness: {
+          label: "ripper-system-abstraction.item.values.hardness",
+          type: "number",
+          applies: (item) => item.type === "shield",
+          path: sourceValue("hardness"),
+        },
+        hitPoints: {
+          label: "ripper-system-abstraction.item.values.hitPoints",
+          type: "number",
+          applies: (item) => item.type === "shield",
+          path: sourceValue("hp.max"),
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: (item) => item.type === "consumable" || (item.type === "ammo" && item.isMagazine),
+          path: sourceValue("uses.max"),
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: isPhysical,
+          path: {
+            get: (item) => item._source.system.bulk?.value ?? null,
+            set: (item, value) => ({ "system.bulk.value": value <= 0 ? 0 : value < 1 ? 0.1 : Math.round(value) }),
+          },
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: isPhysical,
+          path: sourceValue("price.value.gp"),
+        },
+      },
+
       fromSpell: {
         isSpell: (item) => item.type === "spell" && !item.isRitual && spellItemCategories(item).length > 0,
         create: itemFromSpell,
@@ -251,6 +350,7 @@ export default async function pf2e() {
     },
     testsInterface: {
     resultType: "total",
+    supportsAdvantage: true,
     buildInputs: () => {
       const choices = {};
 
@@ -282,11 +382,14 @@ export default async function pf2e() {
       };
     },
 
+    initiativeOptions: (options = {}) => ({ skipDialog: options.fastForward ?? false, rollTwice: rollTwice(options) }),
+
     processCheck: async (actor, inputs, options = {}) => {
       const [type, key] = inputs.check.split(".");
       const rollOptions = {
         skipDialog: options.fastForward ?? false,
         event: options.event,
+        rollTwice: rollTwice(options),
       };
       if (inputs.dc != null) rollOptions.dc = inputs.dc;
 

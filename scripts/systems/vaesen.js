@@ -16,6 +16,14 @@ export default async function vaesen() {
   }
 
   const VAESEN_ATTRIBUTES = ["physique", "precision", "logic", "empathy", "might", "bodyControl", "magic", "manipulation"];
+  // Item fields come from template.json and the sheets save them from text inputs, so they may be numbers or strings
+  const numberAt = (path) => ({
+    get: (item) => {
+      const value = foundry.utils.getProperty(item.system, path);
+      return value === "" || value == null || !Number.isFinite(Number(value)) ? null : Number(value);
+    },
+    set: (item, value) => ({ [`system.${path}`]: value }),
+  });
 
   return {
     dataPaths: {
@@ -38,7 +46,10 @@ export default async function vaesen() {
     },
 
     item: {
-      quantity: "",
+      quantity: {
+        get: (item) => (item.type === "gear" ? numberAt("quantity").get(item) ?? 1 : null),
+        set: (item, value) => ({ "system.quantity": value }),
+      },
       weight: "",
 
       equipped: "",
@@ -46,6 +57,33 @@ export default async function vaesen() {
 
       uses: "",
       maximumUses: "",
+
+      values: {
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: numberAt("bonus"),
+        },
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: numberAt("damage"),
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: numberAt("protection"),
+        },
+        skillBonus: {
+          label: "ripper-system-abstraction.item.values.skillBonus",
+          type: "number",
+          applies: (item) => item.type === "gear",
+          path: numberAt("bonus"),
+        },
+      },
     },
 
     currency: {

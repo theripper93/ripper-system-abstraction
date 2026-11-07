@@ -54,6 +54,17 @@ export default async function crucible() {
     };
   }
 
+  const PHYSICAL_TYPES = ["weapon", "armor", "accessory", "consumable", "tool", "loot"];
+  // system.price is prepared as base price scaled by rarity; writes store the base price
+  const priceField = {
+    get: (item) => item.system.price,
+    set: (item, value) => {
+      const rarity = item.system.rarity ?? 0;
+      const base = rarity < 0 ? value * Math.abs(rarity - 1) : value / Math.pow(rarity + 1, 3);
+      return { "system.price": Math.round(base) };
+    },
+  };
+
   return {
     dataPaths: {
     actor: {
@@ -86,6 +97,37 @@ export default async function crucible() {
 
       uses: "uses.value",
       maximumUses: "uses.max",
+
+      values: {
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          // prepared armor.base is clamped to the category range and halved when broken
+          path: {
+            get: (item) => item._source.system.armor?.base ?? null,
+            set: (item, value) => ({ "system.armor.base": value }),
+          },
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: (item) => item.type === "consumable",
+          path: "uses.max",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => PHYSICAL_TYPES.includes(item.type),
+          path: "weight",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => PHYSICAL_TYPES.includes(item.type),
+          path: priceField,
+        },
+      },
     },
 
     currency: {
@@ -105,14 +147,7 @@ export default async function crucible() {
 
       item: {
         single: {
-          value: {
-            get: (item) => item.system.price,
-            set: (item, value) => {
-              const rarity = item.system.rarity ?? 0;
-              const base = rarity < 0 ? value * Math.abs(rarity - 1) : value / Math.pow(rarity + 1, 3);
-              return { "system.price": Math.round(base) };
-            },
-          },
+          value: priceField,
           denomination: "",
         },
 
@@ -144,6 +179,7 @@ export default async function crucible() {
     },
     testsInterface: {
     resultType: "total",
+    supportsAdvantage: true,
     buildInputs: () => {
       const choices = {};
 
@@ -173,6 +209,8 @@ export default async function crucible() {
       if (!actor.system.skills) throw new Error(`Crucible actors of type "${actor.type}" cannot perform checks.`);
       const check = await actor.rollSkill(inputs.check, {
         dc: inputs.dc ?? undefined,
+        boons: options.advantage ? 1 : 0,
+        banes: options.disadvantage ? 1 : 0,
         chatMessage: !options.silent,
         dialog: !options.fastForward,
       });

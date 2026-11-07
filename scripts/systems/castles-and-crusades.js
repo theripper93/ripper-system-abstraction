@@ -59,6 +59,33 @@ export default async function castlesAndCrusades() {
 
       uses: "",
       maximumUses: "",
+
+      values: {
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "bonusAb.value",
+        },
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "damage.value",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "armorClass.value",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.weight?.value !== undefined,
+          path: "weight.value",
+        },
+      },
     },
 
     currency: {

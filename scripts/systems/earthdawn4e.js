@@ -3,6 +3,15 @@ const fields = foundry.data.fields;
 
 export default async function earthdawn4e() {
   const rate = Number(game.settings.get("earthdawn4e", "moneyConversionRate")) || 10;
+  // Item fields come from template.json (no data models): numeric values are
+  // stored as "" until set, so read them as numbers or null.
+  const numberAt = (path) => ({
+    get: (item) => {
+      const value = foundry.utils.getProperty(item.system, path);
+      return value === "" || value == null || !Number.isFinite(Number(value)) ? null : Number(value);
+    },
+    set: (item, value) => ({ [`system.${path}`]: value }),
+  });
 
   const EARTHDAWN_ATTRIBUTES = {
     dexterityStep: "earthdawn.d.dexterity",
@@ -85,8 +94,68 @@ export default async function earthdawn4e() {
       equipped: "worn",
       attuned: "",
 
-      uses: "",
-      maximumUses: "",
+      uses: "ammo.value",
+      maximumUses: "ammo.max",
+
+      values: {
+        damageStep: {
+          label: "ripper-system-abstraction.item.values.damageStep",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: numberAt("damagestep"),
+        },
+        damageBonus: {
+          label: "ripper-system-abstraction.item.values.damageBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: numberAt("timesForged"),
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor" || item.type === "shield",
+          path: {
+            get: (item) => numberAt(item.type === "shield" ? "physicaldefense" : "Aphysicalarmor").get(item),
+            set: (item, value) => ({ [item.type === "shield" ? "system.physicaldefense" : "system.Aphysicalarmor"]: value }),
+          },
+        },
+        armorBonus: {
+          label: "ripper-system-abstraction.item.values.armorBonus",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: numberAt("timesForgedPhysical"),
+        },
+        mysticArmor: {
+          label: "ripper-system-abstraction.item.values.mysticArmor",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: numberAt("Amysticarmor"),
+        },
+        mysticArmorBonus: {
+          label: "ripper-system-abstraction.item.values.mysticArmorBonus",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: numberAt("timesForgedMystic"),
+        },
+        mysticDefense: {
+          label: "ripper-system-abstraction.item.values.mysticDefense",
+          type: "number",
+          applies: (item) => item.type === "shield",
+          path: numberAt("mysticdefense"),
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.weight !== undefined,
+          path: numberAt("weight"),
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.cost !== undefined,
+          path: numberAt("cost"),
+        },
+      },
     },
 
     currency: {

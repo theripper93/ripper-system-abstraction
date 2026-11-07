@@ -417,6 +417,31 @@ async function testItemQuantity(item) {
   }
 }
 
+async function testItemValues(items) {
+  const declared = api.item.listValues();
+  if (!declared.length) {
+    skip("item.values", "system declares no modifiable values");
+    return;
+  }
+  pass("item.listValues", declared.map((v) => v.id).join(", "));
+  const item = items.find((i) => api.item.getValues(i).some((v) => v.type === "number"));
+  if (!item) {
+    skip("item.getValues", "no item with a numeric value found");
+    return;
+  }
+  const value = api.item.getValues(item).find((v) => v.type === "number");
+  const original = value.value;
+  const expected = api.item.previewValue(item, value.id, "add", 1);
+  if (typeof expected === "number") pass("item.previewValue", `${value.id} ${original} -> ${expected}`);
+  else fail("item.previewValue", `expected a number, got ${expected}`);
+  await api.item.modifyValue(item, value.id, "add", 1);
+  if (api.item.getValue(item, value.id) === expected) pass("item.modifyValue", `${item.name} ${value.id} ${expected}`);
+  else fail("item.modifyValue", `expected ${expected}, got ${api.item.getValue(item, value.id)}`);
+  await api.item.setValue(item, value.id, original);
+  if (api.item.getValue(item, value.id) === original) pass("item.setValue", `restored ${original}`);
+  else fail("item.setValue", `expected ${original}, got ${api.item.getValue(item, value.id)}`);
+}
+
 async function testItemEquipment(item) {
   if (!item) {
     skip("item.equipment", "no equippable item found");
@@ -713,6 +738,7 @@ export async function runAPITests(actor) {
   await testItemUses(usesItem);
   await testItemAttunement(attunementItem);
   testItemWeight(weightItem);
+  await testItemValues(items);
   await testItemFromSpell(actor);
   await testTestsInterface(actor);
 

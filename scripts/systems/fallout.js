@@ -7,6 +7,8 @@ export default async function fallout() {
     if (pack && !pack.indexed) await pack.getIndex();
   } catch (err) {}
 
+  const isArmor = (item) => item.type === "apparel" || item.type === "robot_armor";
+
 
   class FalloutCheckInput extends DataModel {
     static defineSchema() {
@@ -47,8 +49,65 @@ export default async function fallout() {
       equipped: "equipped",
       attuned: "",
 
-      uses: "",
-      maximumUses: "",
+      uses: ["uses.value", "charges.current"],
+      maximumUses: ["uses.max", "charges.max"],
+
+      values: {
+        damageDice: {
+          label: "ripper-system-abstraction.item.values.damageDice",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "damage.rating",
+        },
+        fireRate: {
+          label: "ripper-system-abstraction.item.values.fireRate",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "fireRate",
+        },
+        physicalResistance: {
+          label: "ripper-system-abstraction.item.values.physicalResistance",
+          type: "number",
+          applies: isArmor,
+          path: "resistance.physical",
+        },
+        energyResistance: {
+          label: "ripper-system-abstraction.item.values.energyResistance",
+          type: "number",
+          applies: isArmor,
+          path: "resistance.energy",
+        },
+        radiationResistance: {
+          label: "ripper-system-abstraction.item.values.radiationResistance",
+          type: "number",
+          applies: isArmor,
+          path: "resistance.radiation",
+        },
+        hitPoints: {
+          label: "ripper-system-abstraction.item.values.hitPoints",
+          type: "number",
+          applies: (item) => item.type === "apparel" && item.system.apparelType === "powerArmor",
+          path: "health.max",
+        },
+        capacity: {
+          label: "ripper-system-abstraction.item.values.capacity",
+          type: "number",
+          applies: (item) => item.type === "ammo" && !!item.system.fusionCore,
+          path: "charges.max",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.weight !== undefined,
+          path: "weight",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.cost !== undefined,
+          path: "cost",
+        },
+      },
     },
 
     currency: {

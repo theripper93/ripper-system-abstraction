@@ -9,6 +9,35 @@ function findCoin(actor, key) {
   return money.find((item) => item.name.toLowerCase() === name) ?? money.find((item) => item.system.coinValue?.value === COINS[key].value);
 }
 
+const AP_LOCATIONS = ["head", "lArm", "rArm", "lLeg", "rLeg", "body"];
+
+// Armour protection as one number: the highest AP among the locations it covers.
+function armourPoints(item) {
+  return Math.max(0, ...AP_LOCATIONS.map((loc) => Number(item.system.AP?.[loc]) || 0));
+}
+
+// Shift every covered location (all of them when none is covered) by the change.
+function setArmourPoints(item, value) {
+  const delta = (Number(value) || 0) - armourPoints(item);
+  const covered = AP_LOCATIONS.filter((loc) => (Number(item.system.AP?.[loc]) || 0) > 0);
+  return Object.fromEntries((covered.length ? covered : AP_LOCATIONS).map((loc) => [`system.AP.${loc}`, Math.max(0, (Number(item.system.AP?.[loc]) || 0) + delta)]));
+}
+
+// Item price in brass pennies (the currency base), stored as gc/ss/bp.
+function priceInBrass(item) {
+  const price = item.system.price ?? {};
+  return (Number(price.gc) || 0) * COINS.gc.value + (Number(price.ss) || 0) * COINS.ss.value + (Number(price.bp) || 0);
+}
+
+function setPriceInBrass(item, value) {
+  const total = Math.max(0, Math.round(Number(value) || 0));
+  return {
+    "system.price.gc": Math.floor(total / COINS.gc.value),
+    "system.price.ss": Math.floor((total % COINS.gc.value) / COINS.ss.value),
+    "system.price.bp": total % COINS.ss.value,
+  };
+}
+
 export default async function wfrp4e() {
   for (const packId of ["wfrp4e-core.items", "wfrp4e.basic"]) {
     try {
@@ -106,6 +135,39 @@ export default async function wfrp4e() {
 
       uses: "loaded.amt",
       maximumUses: "loaded.max",
+
+      values: {
+        damageBonus: {
+          label: "ripper-system-abstraction.item.values.damageBonus",
+          type: "formula",
+          applies: (item) => ["weapon", "ammunition"].includes(item.type),
+          path: "damage.value",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armour",
+          path: { get: armourPoints, set: setArmourPoints },
+        },
+        range: {
+          label: "ripper-system-abstraction.item.values.range",
+          type: "formula",
+          applies: (item) => item.type === "weapon" && !!item.system.isRanged,
+          path: "range.value",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.encumbrance?.value !== undefined,
+          path: "encumbrance.value",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.price !== undefined && !["cargo", "money"].includes(item.type),
+          path: { get: priceInBrass, set: setPriceInBrass },
+        },
+      },
     },
 
     currency: {

@@ -2,6 +2,8 @@ const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
 export default async function dnd5e() {
+  const isArmor = (item) => item.type === "equipment" && item.system.type?.value in (CONFIG.DND5E.armorTypes ?? {});
+  const attackActivity = (item) => item.system.activities?.find?.((activity) => activity.type === "attack") ?? null;
   const toolLabel = (key, entry) => {
     const uuid = typeof entry === "string" ? entry : entry?.id;
     return (uuid && fromUuidSync(uuid, { strict: false })?.name) || key.capitalize();
@@ -92,11 +94,85 @@ export default async function dnd5e() {
       usesSpent: "uses.spent",
       maximumUses: "uses.max",
 
+      values: {
+        magicalBonus: {
+          label: "ripper-system-abstraction.item.values.magicalBonus",
+          type: "formula",
+          applies: (item) => item.type === "weapon" || isArmor(item),
+          path: {
+            get: (item) => (item.type === "weapon" ? item.system.magicalBonus : item.system.armor?.magicalBonus) ?? "",
+            set: (item, value) => ({ [item.type === "weapon" ? "system.magicalBonus" : "system.armor.magicalBonus"]: value }),
+          },
+        },
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "formula",
+          applies: (item) => !!attackActivity(item),
+          path: {
+            get: (item) => attackActivity(item)?.attack?.bonus ?? "",
+            set: (item, value) => ({ [`system.activities.${attackActivity(item).id}.attack.bonus`]: value }),
+          },
+        },
+        damageBonus: {
+          label: "ripper-system-abstraction.item.values.damageBonus",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "damage.base.bonus",
+        },
+        damageDice: {
+          label: "ripper-system-abstraction.item.values.damageDice",
+          type: "number",
+          applies: (item) => item.type === "weapon" && item.system.damage?.base?.number != null,
+          path: "damage.base.number",
+        },
+        damageDie: {
+          label: "ripper-system-abstraction.item.values.damageDie",
+          type: "number",
+          applies: (item) => item.type === "weapon" && item.system.damage?.base?.denomination != null,
+          path: "damage.base.denomination",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: isArmor,
+          path: "armor.value",
+        },
+        range: {
+          label: "ripper-system-abstraction.item.values.range",
+          type: "number",
+          applies: (item) => item.type === "weapon" && item.system.range?.value != null,
+          path: "range.value",
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "formula",
+          applies: (item) => item.system.uses !== undefined && item.type !== "spell",
+          path: "uses.max",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.weight?.value !== undefined,
+          path: "weight.value",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.price?.value !== undefined,
+          path: "price.value",
+        },
+      },
+
       fromSpell: {
         isSpell: (item) => item.type === "spell",
         create: async (spell, { dialog }) => {
-          const scroll = await CONFIG.Item.documentClass.createScrollFromSpell(spell, {}, { dialog });
-          return scroll?.toObject() ?? null;
+          try {
+            const scroll = await CONFIG.Item.documentClass.createScrollFromSpell(spell, {}, { dialog });
+            return scroll?.toObject() ?? null;
+          } catch (err) {
+            console.warn("Ripper System Abstraction | dnd5e could not create a spell scroll", err);
+            return null;
+          }
         },
       },
     },

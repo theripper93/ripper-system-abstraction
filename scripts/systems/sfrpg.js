@@ -29,6 +29,15 @@ export default async function sfrpg() {
     }
   }
 
+  const bulkToWeight = (bulk) => {
+    if (bulk == null || bulk === "") return null;
+    if (bulk === "L") return 0.1;
+    if (bulk === "-") return 0;
+    return Number.isFinite(Number(bulk)) ? Number(bulk) : null;
+  };
+  const weightToBulk = (value) => (value <= 0 ? "-" : value < 1 ? "L" : String(Math.round(value)));
+  const isPhysical = (item) => item.system.price !== undefined;
+
   function normalizeRoll(result, dc) {
     if (!result) {
       return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
@@ -77,19 +86,82 @@ export default async function sfrpg() {
 
     item: {
       quantity: "quantity",
-      weight: (item) => {
-        const bulk = item.system.bulk;
-        if (bulk == null || bulk === "") return null;
-        if (bulk === "L") return 0.1;
-        if (bulk === "-") return 0;
-        return Number.isFinite(Number(bulk)) ? Number(bulk) : null;
-      },
+      weight: (item) => bulkToWeight(item.system.bulk),
 
       equipped: "equipped",
       attuned: "",
 
       uses: "uses.value",
       maximumUses: "uses.max",
+
+      values: {
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "attackBonus",
+        },
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "formula",
+          applies: (item) => (item.type === "weapon" || item.type === "shield") && !!item.system.damage?.parts?.length,
+          path: {
+            get: (item) => item.system.damage.parts[0].formula,
+            set: (item, value) => ({ "system.damage.parts": item.system.damage.parts.map((part, index) => (index ? part : { ...part, formula: value })) }),
+          },
+        },
+        range: {
+          label: "ripper-system-abstraction.item.values.range",
+          type: "formula",
+          applies: (item) => item.type === "weapon" && !!item.system.range?.value,
+          path: "range.value",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "shield",
+          path: "bonus.wielded",
+        },
+        energyArmorClass: {
+          label: "ripper-system-abstraction.item.values.energyArmorClass",
+          type: "number",
+          applies: (item) => item.type === "equipment" && !!item.system.armor,
+          path: "armor.eac",
+        },
+        kineticArmorClass: {
+          label: "ripper-system-abstraction.item.values.kineticArmorClass",
+          type: "number",
+          applies: (item) => item.type === "equipment" && !!item.system.armor,
+          path: "armor.kac",
+        },
+        capacity: {
+          label: "ripper-system-abstraction.item.values.capacity",
+          type: "number",
+          applies: (item) => item.system.capacity?.max > 0,
+          path: "capacity.max",
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "formula",
+          applies: (item) => isPhysical(item) && item.system.uses !== undefined,
+          path: "uses.max",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.bulk !== undefined,
+          path: {
+            get: (item) => bulkToWeight(item.system.bulk),
+            set: (item, value) => ({ "system.bulk": weightToBulk(value) }),
+          },
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: isPhysical,
+          path: "price",
+        },
+      },
     },
 
     currency: {

@@ -29,6 +29,8 @@ export default async function exaltedthird() {
     }
   }
 
+  const tempLevels = (actor) => Number(actor.system.health?.levels?.temp?.value) || 0;
+
   return {
     dataPaths: {
     actor: {
@@ -42,11 +44,11 @@ export default async function exaltedthird() {
 
     health: {
       current: {
-        get: (actor) => actor.system.health?.value,
+        get: (actor) => (actor.system.health ? Math.max(0, actor.system.health.value - tempLevels(actor)) : undefined),
         set: (actor, value) => {
           const health = actor.system.health;
           const next = { bashing: health.bashing, lethal: health.lethal, aggravated: health.aggravated };
-          let delta = Math.max(0, health.max - value) - (next.bashing + next.lethal + next.aggravated);
+          let delta = Math.max(0, health.max - value - tempLevels(actor)) - (next.bashing + next.lethal + next.aggravated);
           if (delta > 0) next.lethal += delta;
           for (const key of ["bashing", "lethal", "aggravated"]) {
             const healed = Math.min(next[key], Math.max(0, -delta));
@@ -56,8 +58,8 @@ export default async function exaltedthird() {
           return Object.fromEntries(Object.entries(next).map(([key, amount]) => [`system.health.${key}`, amount]));
         },
       },
-      maximum: "health.max",
-      temporary: "",
+      maximum: (actor) => (actor.system.health ? actor.system.health.max - tempLevels(actor) : undefined),
+      temporary: "health.levels.temp.value",
       minimum: "",
 
       wounds: "",
@@ -73,6 +75,51 @@ export default async function exaltedthird() {
 
       uses: "",
       maximumUses: "",
+
+      values: {
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "witheringaccuracy",
+        },
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "witheringdamage",
+        },
+        overwhelming: {
+          label: "ripper-system-abstraction.item.values.overwhelming",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "overwhelming",
+        },
+        parry: {
+          label: "ripper-system-abstraction.item.values.parry",
+          type: "number",
+          applies: (item) => item.type === "weapon" && item.system.weapontype === "melee",
+          path: "defense",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "soak",
+        },
+        hardness: {
+          label: "ripper-system-abstraction.item.values.hardness",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "hardness",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => ["weapon", "armor", "item"].includes(item.type),
+          path: "cost",
+        },
+      },
     },
 
     currency: {
@@ -104,7 +151,7 @@ export default async function exaltedthird() {
 
     features: {
       supportsHealth: true,
-      supportsTemporaryHealth: false,
+      supportsTemporaryHealth: true,
       supportsWounds: false,
       supportsCurrency: false,
       supportsWeight: false,

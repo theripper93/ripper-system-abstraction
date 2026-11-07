@@ -1,3 +1,4 @@
+import { getDataPaths } from "../systems/_index.js";
 import {
   resolveDataPaths,
   getPath,
@@ -62,6 +63,63 @@ function writeState(item, key, enabled, operation, options) {
   const state = STATES[key];
   const value = enabled ? (itemConfig(dp)[state.on] ?? true) : (itemConfig(dp)[state.off] ?? false);
   return executeUpdate(item, setPath(item, spec, value), options);
+}
+
+
+const VALUE_MODES = ["add", "multiply", "override", "upgrade", "downgrade"];
+
+function valueSpecs(item) {
+  return itemConfig(resolveDataPaths(item)).values ?? {};
+}
+
+function valueSpec(item, id) {
+  const spec = valueSpecs(item)[id];
+  if (!spec) return null;
+  if (typeof spec.applies === "function" && !spec.applies(item)) return null;
+  return spec;
+}
+
+function localizeValueLabel(spec, id) {
+  return spec.label ? game.i18n.localize(spec.label) : id;
+}
+
+function asNumber(value) {
+  const number = Number(value);
+  return value !== "" && value != null && Number.isFinite(number) ? number : null;
+}
+
+function computeValue(type, current, mode, amount) {
+  if (!VALUE_MODES.includes(mode)) throw new Error(`[Ripper System Abstraction] Unknown value mode "${mode}".`);
+  if (mode === "override") return type === "number" ? asNumber(amount) ?? 0 : String(amount ?? "");
+  if (type === "number") {
+    const base = asNumber(current) ?? 0;
+    const delta = asNumber(amount) ?? 0;
+    return { add: base + delta, multiply: base * delta, upgrade: Math.max(base, delta), downgrade: Math.min(base, delta) }[mode];
+  }
+  const text = String(current ?? "").trim();
+  const extra = String(amount ?? "").trim();
+  const [a, b] = [asNumber(text), asNumber(extra)];
+  if (a != null && b != null) return String({ add: a + b, multiply: a * b, upgrade: Math.max(a, b), downgrade: Math.min(a, b) }[mode]);
+  if (mode === "add") return text ? `${text} + ${extra}` : extra;
+  if (mode === "multiply") return text ? `(${text}) * ${extra}` : "";
+  return extra;
+}
+
+/**
+ * The value an Item would hold after writing `value`, read back from an
+ * in-memory copy: adapters may round or clamp on write (dice sizes, bulk
+ * steps, range categories) and systems may coerce the stored type. Null when
+ * the copy can't be built.
+ */
+function storedValue(item, spec, value) {
+  try {
+    const data = item.toObject();
+    foundry.utils.mergeObject(data, foundry.utils.expandObject(setPath(item, spec.path, value)));
+    const copy = new item.constructor(data, { parent: item.parent, strict: false });
+    return getPath(copy, spec.path) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -343,6 +401,94 @@ export const item = {
     }
     const maximum = getPath(item, maximumSpec);
     return executeUpdate(item, setPath(item, usesSpec, maximum), options);
+  },
+
+  // ---------------------------------------------------------------
+  // Modifiable values
+  // ---------------------------------------------------------------
+
+  /**
+   * Every modifiable value the system declares (e.g. magical bonus, damage
+   * bonus), independent of any item.
+   *
+   * @returns {{id: string, label: string, type: "number"|"formula"}[]}
+   */
+  listValues() {
+    const values = getDataPaths()?.item?.values ?? {};
+    return Object.entries(values).map(([id, spec]) => ({ id, label: localizeValueLabel(spec, id), type: spec.type ?? "number" }));
+  },
+
+  /**
+   * The modifiable values that apply to this Item, with their current value.
+   *
+   * @param {Item} item
+   * @returns {{id: string, label: string, type: string, value: *}[]}
+   */
+  getValues(item) {
+    return Object.keys(valueSpecs(item))
+      .map((id) => [id, valueSpec(item, id)])
+      .filter(([, spec]) => spec)
+      .map(([id, spec]) => ({ id, label: localizeValueLabel(spec, id), type: spec.type ?? "number", value: getPath(item, spec.path) ?? null }));
+  },
+
+  /**
+   * @param {Item} item
+   * @param {string} id
+   * @returns {*} The current value, or null when it does not apply to this Item.
+   */
+  getValue(item, id) {
+    const spec = valueSpec(item, id);
+    return spec ? (getPath(item, spec.path) ?? null) : null;
+  },
+
+  /**
+   * @param {Item} item
+   * @param {string} id
+   * @param {*} value
+   * @param {Object} [options]
+   * @param {boolean} [options.update=true]
+   * @returns {Promise<Item|Object<string,*>>}
+   */
+  setValue(item, id, value, options = {}) {
+    const spec = valueSpec(item, id);
+    if (!spec) throw unsupported(item, "item.setValue", `value "${id}" does not apply`);
+    return executeUpdate(item, setPath(item, spec.path, value), options);
+  },
+
+  /**
+   * The value an Item would have after a modification, without changing it.
+   * Modes: add, multiply, override, upgrade (keep the higher), downgrade
+   * (keep the lower). Formula values append on add (e.g. "1d4" + "2" gives
+   * "1d4 + 2") unless both sides are plain numbers.
+   *
+   * @param {Item} item
+   * @param {string} id
+   * @param {string} mode
+   * @param {*} amount
+   * @returns {*} The resulting value, or null when the value does not apply.
+   */
+  previewValue(item, id, mode, amount) {
+    const spec = valueSpec(item, id);
+    if (!spec) return null;
+    const computed = computeValue(spec.type ?? "number", getPath(item, spec.path), mode, amount);
+    return storedValue(item, spec, computed) ?? computed;
+  },
+
+  /**
+   * Apply a modification to one of the Item's values (see previewValue).
+   *
+   * @param {Item} item
+   * @param {string} id
+   * @param {string} mode
+   * @param {*} amount
+   * @param {Object} [options]
+   * @param {boolean} [options.update=true]
+   * @returns {Promise<Item|Object<string,*>>}
+   */
+  modifyValue(item, id, mode, amount, options = {}) {
+    const spec = valueSpec(item, id);
+    if (!spec) throw unsupported(item, "item.modifyValue", `value "${id}" does not apply`);
+    return executeUpdate(item, setPath(item, spec.path, computeValue(spec.type ?? "number", getPath(item, spec.path), mode, amount)), options);
   },
 
   // ---------------------------------------------------------------

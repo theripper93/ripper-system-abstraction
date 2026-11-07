@@ -28,6 +28,16 @@ export default async function worldbuilding() {
 
       uses: "",
       maximumUses: "",
+
+      // other item attributes are user-defined (system.attributes)
+      values: {
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.type === "item",
+          path: "weight",
+        },
+      },
     },
 
     currency: {

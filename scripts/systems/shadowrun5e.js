@@ -2,6 +2,7 @@ const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
 export default async function shadowrun5e() {
+  const isRangedWeapon = (item) => item.type === "weapon" && item.system.category === "range";
 
   class Shadowrun5eThresholdInput extends DataModel {
     static defineSchema() {
@@ -34,7 +35,7 @@ export default async function shadowrun5e() {
   return {
     dataPaths: {
     actor: {
-      type: "",
+      type: "metatype",
       subtype: "",
       size: "",
       level: "",
@@ -60,8 +61,59 @@ export default async function shadowrun5e() {
       equipped: "technology.equipped",
       attuned: "",
 
-      uses: "",
-      maximumUses: "",
+      uses: "ammo.current.value",
+      maximumUses: "ammo.current.max",
+
+      values: {
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "action.damage.base",
+        },
+        armorPenetration: {
+          label: "ripper-system-abstraction.item.values.armorPenetration",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "action.damage.ap.base",
+        },
+        accuracy: {
+          label: "ripper-system-abstraction.item.values.accuracy",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "action.limit.base",
+        },
+        recoilCompensation: {
+          label: "ripper-system-abstraction.item.values.recoilCompensation",
+          type: "number",
+          applies: isRangedWeapon,
+          path: "range.rc.base",
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: isRangedWeapon,
+          path: "ammo.current.max",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "armor.base",
+        },
+        rating: {
+          label: "ripper-system-abstraction.item.values.rating",
+          type: "number",
+          applies: (item) => item.system.technology?.rating !== undefined,
+          path: "technology.rating",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.technology?.cost !== undefined,
+          path: "technology.cost",
+        },
+      },
     },
 
     currency: {

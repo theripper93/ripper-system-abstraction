@@ -57,6 +57,39 @@ export default async function deltagreen() {
 
       uses: "",
       maximumUses: "",
+
+      values: {
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "skillModifier",
+        },
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "damage",
+        },
+        lethality: {
+          label: "ripper-system-abstraction.item.values.lethality",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "lethality",
+        },
+        armorPenetration: {
+          label: "ripper-system-abstraction.item.values.armorPenetration",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "armorPiercing",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "protection",
+        },
+      },
     },
 
     currency: {

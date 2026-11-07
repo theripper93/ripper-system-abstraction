@@ -3,6 +3,24 @@ const fields = foundry.data.fields;
 
 export default async function a5e() {
 
+  const findRoll = (item, type) => {
+    for (const [actionId, action] of Object.entries(item.system.actions ?? {})) {
+      for (const [rollId, roll] of Object.entries(action.rolls ?? {})) {
+        if (roll?.type === type) return { key: `system.actions.${actionId}.rolls.${rollId}`, roll };
+      }
+    }
+    return null;
+  };
+  const attackRange = (item) => {
+    for (const [actionId, action] of Object.entries(item.system.actions ?? {})) {
+      if (!Object.values(action.rolls ?? {}).some((roll) => roll?.type === "attack")) continue;
+      const [rangeId, range] = Object.entries(action.ranges ?? {})[0] ?? [];
+      if (range && range.range !== "" && Number.isFinite(Number(range.range))) return { key: `system.actions.${actionId}.ranges.${rangeId}.range`, value: Number(range.range) };
+    }
+    return null;
+  };
+  const isArmor = (item) => ["armor", "shield"].includes(item.system.objectType) || !!item.system.ac?.baseFormula;
+
   function scrollFromSpell(spell) {
     const { attackBonus, cost, craftingComponent, saveDC, rarity } = CONFIG.A5E.scrollData[spell.system.level];
     const effects = [];
@@ -72,6 +90,13 @@ export default async function a5e() {
     }
   }
 
+  function a5eRollMode(options) {
+    const modes = CONFIG.A5E.ROLL_MODE;
+    if (options.advantage && !options.disadvantage) return modes.ADVANTAGE;
+    if (options.disadvantage && !options.advantage) return modes.DISADVANTAGE;
+    return undefined;
+  }
+
   function normalizeRoll(message, dc) {
     if (!message) {
       return { canceled: true, result: null, target: null, success: null, levelOfSuccess: null, criticalSuccess: false, criticalFailure: false };
@@ -131,6 +156,60 @@ export default async function a5e() {
       uses: "uses.value",
       maximumUses: "uses.max",
 
+      values: {
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "formula",
+          applies: (item) => item.type === "object" && !!findRoll(item, "attack"),
+          path: {
+            get: (item) => findRoll(item, "attack").roll.bonus ?? "",
+            set: (item, value) => ({ [`${findRoll(item, "attack").key}.bonus`]: value }),
+          },
+        },
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "formula",
+          applies: (item) => item.type === "object" && !!findRoll(item, "damage"),
+          path: {
+            get: (item) => findRoll(item, "damage").roll.formula ?? "",
+            set: (item, value) => ({ [`${findRoll(item, "damage").key}.formula`]: value }),
+          },
+        },
+        range: {
+          label: "ripper-system-abstraction.item.values.range",
+          type: "number",
+          applies: (item) => item.type === "object" && !!attackRange(item),
+          path: {
+            get: (item) => attackRange(item).value,
+            set: (item, value) => ({ [attackRange(item).key]: value }),
+          },
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "formula",
+          applies: (item) => item.type === "object" && isArmor(item),
+          path: "ac.baseFormula",
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "formula",
+          applies: (item) => item.type === "object",
+          path: "uses.max",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.type === "object",
+          path: "weight",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.type === "object",
+          path: "price.value",
+        },
+      },
+
       fromSpell: {
         isSpell: (item) => item.type === "spell" && !!CONFIG.A5E.scrollData?.[item.system.level],
         create: async (spell) => scrollFromSpell(spell),
@@ -169,14 +248,14 @@ export default async function a5e() {
 
     experience: {
       current: "details.xp",
-      maximum: "",
+      maximum: (actor) => CONFIG.A5E.CHARACTER_EXP_LEVELS?.[Math.clamp(Number(actor.levels?.character ?? actor.system.details?.level) || 1, 1, 19)] ?? null,
     },
 
     overrides: {
       Actor: {
         npc: {
           actor: { level: "details.cr" },
-          experience: { current: "" },
+          experience: { current: "", maximum: "" },
         },
       },
     },
@@ -193,6 +272,7 @@ export default async function a5e() {
     },
     testsInterface: {
     resultType: "total",
+    supportsAdvantage: true,
     buildInputs: () => {
       const choices = {};
       const group = {
@@ -230,13 +310,14 @@ export default async function a5e() {
       };
     },
 
-    initiativeOptions: (options = {}) => ({ rollOptions: { skipRollDialog: options.fastForward ?? false } }),
+    initiativeOptions: (options = {}) => ({ rollOptions: { skipRollDialog: options.fastForward ?? false, rollMode: a5eRollMode(options) } }),
 
     processCheck: async (actor, inputs, options = {}) => {
       const [type, key] = inputs.check.split(".");
       const rollOptions = {
         skipRollDialog: options.fastForward ?? false,
         event: options.event,
+        rollMode: a5eRollMode(options),
       };
 
       if (!actor.system.abilities) {

@@ -102,7 +102,10 @@ export default async function cyberpunk2020() {
     },
 
     item: {
-      quantity: "",
+      quantity: {
+        get: (item) => (item.type === "ammo" ? item.system.quantity : null),
+        set: (item, value) => ({ "system.quantity": value }),
+      },
       weight: "weight",
 
       equipped: "equipped",
@@ -110,6 +113,64 @@ export default async function cyberpunk2020() {
 
       uses: "shotsLeft",
       maximumUses: "shots",
+
+      values: {
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "damage",
+        },
+        accuracy: {
+          label: "ripper-system-abstraction.item.values.accuracy",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "accuracy",
+        },
+        range: {
+          label: "ripper-system-abstraction.item.values.range",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "range",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor" && !!item.system.coverage,
+          path: {
+            get: (item) => Math.max(0, ...Object.values(item.system.coverage).map((location) => Number(location?.stoppingPower) || 0)),
+            set: (item, value) => {
+              const coverage = Object.entries(item.system.coverage);
+              const current = Math.max(0, ...coverage.map(([, location]) => Number(location?.stoppingPower) || 0));
+              const covered = coverage.filter(([, location]) => Number(location?.stoppingPower) > 0);
+              return Object.fromEntries(
+                (covered.length ? covered : coverage).map(([key, location]) => [
+                  `system.coverage.${key}.stoppingPower`,
+                  String(Math.max(0, (Number(location?.stoppingPower) || 0) + value - current)),
+                ]),
+              );
+            },
+          },
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: (item) => item.type === "weapon" && item.system.shots > 0,
+          path: "shots",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.weight !== undefined,
+          path: "weight",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.cost !== undefined,
+          path: "cost",
+        },
+      },
     },
 
     currency: {

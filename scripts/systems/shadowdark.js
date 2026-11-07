@@ -2,6 +2,10 @@ const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
 export default async function shadowdark() {
+  const isMainArmor = (item) => item.type === "Armor" && !!item.system.ac?.base;
+  const dieSize = (die) => Number(/^d(\d+)$/.exec(die ?? "")?.[1]) || null;
+  // The weapon's main damage die key ("d6"): one-handed, or two-handed for two-handed-only weapons.
+  const mainDieKey = (item) => (dieSize(item.system.damage?.oneHanded) ? "oneHanded" : dieSize(item.system.damage?.twoHanded) ? "twoHanded" : null);
 
   class ShadowdarkCheckInput extends DataModel {
     static defineSchema() {
@@ -102,6 +106,52 @@ export default async function shadowdark() {
       uses: "uses.available",
       maximumUses: "uses.max",
 
+      values: {
+        magicalBonus: {
+          label: "ripper-system-abstraction.item.values.magicalBonus",
+          type: "number",
+          applies: isMainArmor,
+          path: "ac.modifier",
+        },
+        damageDie: {
+          label: "ripper-system-abstraction.item.values.damageDie",
+          type: "number",
+          applies: (item) => item.type === "Weapon" && !!mainDieKey(item),
+          path: {
+            get: (item) => dieSize(item.system.damage[mainDieKey(item)]),
+            // A versatile weapon's two-handed die moves by the same number of faces.
+            set: (item, value) => {
+              const key = mainDieKey(item);
+              const changes = { [`system.damage.${key}`]: `d${value}` };
+              const other = dieSize(item.system.damage.twoHanded);
+              if (key === "oneHanded" && other) changes["system.damage.twoHanded"] = `d${other + value - dieSize(item.system.damage.oneHanded)}`;
+              return changes;
+            },
+          },
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "Armor" && (!!item.system.ac?.base || !!item.system.ac?.modifier || !!item.system.isAShield),
+          path: {
+            get: (item) => (isMainArmor(item) ? item.system.ac.base : item.system.ac?.modifier) ?? 0,
+            set: (item, value) => ({ [isMainArmor(item) ? "system.ac.base" : "system.ac.modifier"]: value }),
+          },
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.slots?.slots_used !== undefined,
+          path: "slots.slots_used",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.cost?.gp !== undefined,
+          path: "cost.gp",
+        },
+      },
+
       fromSpell: {
         isSpell: (item) => item.type === "Spell",
         create: itemFromSpell,
@@ -156,6 +206,7 @@ export default async function shadowdark() {
     },
     testsInterface: {
     resultType: "total",
+    supportsAdvantage: true,
     buildInputs: () => {
       const choices = {};
 
@@ -188,8 +239,17 @@ export default async function shadowdark() {
         event: options.event,
       };
       if (inputs.dc != null) config.mainRoll = { dc: inputs.dc };
+      const advantage = (options.advantage ? 1 : 0) - (options.disadvantage ? 1 : 0);
+      const hookId = advantage && Hooks.on("SD-Stat-Check", (checkConfig) => {
+        if (checkConfig === config) config.mainRoll.advantage = Math.clamp((Number(config.mainRoll.advantage) || 0) + advantage, -1, 1);
+      });
 
-      const roll = await actor.system.rollStatCheck(inputs.check, config);
+      let roll;
+      try {
+        roll = await actor.system.rollStatCheck(inputs.check, config);
+      } finally {
+        if (hookId) Hooks.off("SD-Stat-Check", hookId);
+      }
       return normalizeRoll(roll, inputs.dc);
     },
     },

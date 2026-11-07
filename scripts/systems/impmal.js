@@ -1,6 +1,9 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
+// Ranged weapons that reload a magazine (grenades and explosives use their own quantity).
+const hasMagazine = (item) => item.type === "weapon" && item.system.attackType === "ranged" && !item.system.selfAmmo;
+
 export default async function impmal() {
 
   class ImpMalCheckInput extends DataModel {
@@ -80,6 +83,52 @@ export default async function impmal() {
 
       uses: "uses.value",
       maximumUses: "uses.max",
+
+      values: {
+        damageBonus: {
+          label: "ripper-system-abstraction.item.values.damageBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon" || item.type === "ammo",
+          path: {
+            // Weapon base damage is a string field the system reads with Number().
+            get: (item) => (item.type === "weapon" ? Number(item.system.damage?.base) || 0 : item.system.damage),
+            set: (item, value) => (item.type === "weapon" ? { "system.damage.base": String(value) } : { "system.damage": value }),
+          },
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "protection",
+          path: "armour",
+        },
+        forceFieldProtection: {
+          label: "ripper-system-abstraction.item.values.forceFieldProtection",
+          type: "formula",
+          applies: (item) => item.type === "forceField",
+          path: "protection",
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: (item) => hasMagazine(item) || (item.type === "equipment" && !!item.system.uses?.enabled),
+          path: {
+            get: (item) => (item.type === "weapon" ? item.system.mag?.value : item.system.uses?.max),
+            set: (item, value) => ({ [item.type === "weapon" ? "system.mag.value" : "system.uses.max"]: value }),
+          },
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.encumbrance?.value !== undefined,
+          path: "encumbrance.value",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.cost !== undefined,
+          path: "cost",
+        },
+      },
     },
 
     currency: {
@@ -124,6 +173,7 @@ export default async function impmal() {
     },
     testsInterface: {
     resultType: "rollUnder",
+    supportsAdvantage: true,
     buildInputs: () => {
       const choices = {};
       const group = {
@@ -167,6 +217,8 @@ export default async function impmal() {
         fields: { difficulty: "challenging" },
       };
       if (inputs.modifier != null) context.fields.modifier = inputs.modifier;
+      if (options.advantage) context.fields.advantage = 1;
+      if (options.disadvantage) context.fields.disadvantage = 1;
 
       const resolveOnClose = Hooks.on("renderApplicationV2", (app) => {
         if (typeof app.resolve !== "function") return;

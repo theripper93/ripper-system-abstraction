@@ -25,6 +25,8 @@ export default async function daggerheart() {
   const homebrewCurrency = game.settings.get(CONFIG.DH.id, CONFIG.DH.SETTINGS.gameSettings.Homebrew)?.currency ?? {};
   const coins = Object.entries(COIN_VALUES).filter(([key]) => homebrewCurrency[key]?.enabled !== false);
   const [base = "coins", baseValue = 1] = coins[0] ?? [];
+  const isWeapon = (item) => item.type === "weapon";
+  const nearestDie = (value) => [4, 6, 8, 10, 12, 20].reduce((best, die) => (Math.abs(die - value) < Math.abs(best - value) ? die : best));
 
   class DaggerheartCheckInput extends DataModel {
     static defineSchema() {
@@ -85,6 +87,60 @@ export default async function daggerheart() {
 
       uses: "resource.value",
       maximumUses: "resource.max",
+
+      values: {
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: isWeapon,
+          path: {
+            get: (item) => item.system.attack?.roll?.bonus ?? 0,
+            set: (item, value) => ({ "system.attack.roll.bonus": value }),
+          },
+        },
+        damageBonus: {
+          label: "ripper-system-abstraction.item.values.damageBonus",
+          type: "number",
+          applies: isWeapon,
+          path: {
+            get: (item) => item.system.attack?.damage?.main?.value?.bonus ?? 0,
+            set: (item, value) => ({ "system.attack.damage.main.value.bonus": value }),
+          },
+        },
+        damageDie: {
+          label: "ripper-system-abstraction.item.values.damageDie",
+          type: "number",
+          applies: (item) => isWeapon(item) && !!item.system.attack?.damage?.main?.value?.dice,
+          path: {
+            get: (item) => Number(item.system.attack.damage.main.value.dice.slice(1)),
+            set: (item, value) => ({ "system.attack.damage.main.value.dice": `d${nearestDie(value)}` }),
+          },
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "armor.max",
+        },
+        majorThreshold: {
+          label: "ripper-system-abstraction.item.values.majorThreshold",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "baseThresholds.major",
+        },
+        severeThreshold: {
+          label: "ripper-system-abstraction.item.values.severeThreshold",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "baseThresholds.severe",
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "formula",
+          applies: (item) => (isWeapon(item) || item.type === "armor") && !!item.system.resource,
+          path: "resource.max",
+        },
+      },
     },
 
     currency: {
@@ -132,6 +188,7 @@ export default async function daggerheart() {
     },
     testsInterface: {
     resultType: "total",
+    supportsAdvantage: true,
     buildInputs: () => {
       const choices = {};
 
@@ -162,6 +219,7 @@ export default async function daggerheart() {
         throw new Error(`Daggerheart actors of type "${actor.type}" cannot perform checks.`);
       }
       const rollOptions = { event: options.event };
+      if (options.advantage !== options.disadvantage) Object.assign(rollOptions, { advantage: !!options.advantage, disadvantage: !!options.disadvantage });
       if (options.fastForward) rollOptions.dialog = { configure: false };
       if (inputs.difficulty != null) {
         rollOptions.roll = {

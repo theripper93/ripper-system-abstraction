@@ -155,6 +155,18 @@
  *     it as a spell, or null when canceled. With `dialog: false` it uses the
  *     system's defaults without prompting. It must not create documents.
  *
+ * values (optional object):
+ *   Item values that crafting or upgrade modules may change, keyed by an id
+ *   shared across systems where possible (magicalBonus, attackBonus,
+ *   damageBonus, damageDice, damageDie, armorClass, range, maximumUses,
+ *   weight, price). Each entry:
+ *   - `label`: localization key.
+ *   - `type`: "number" or "formula" (a roll formula string, e.g. "1d4 + 1").
+ *   - `path`: a path spec, array of candidates or `{ get, set }` accessor.
+ *   - `applies(item) => boolean` (optional): whether this Item has the value.
+ *   Read and written through item.listValues/getValues/getValue/setValue/
+ *   previewValue/modifyValue.
+ *
  * ---------------------------------------------------------------------------
  * CURRENCY
  * ---------------------------------------------------------------------------

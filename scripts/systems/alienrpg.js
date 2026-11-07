@@ -3,6 +3,10 @@ const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
 export default async function alienrpg() {
+  const isWeapon = (item) => item.type === "weapon" || item.type === "spacecraftweapons";
+  const formatCost = (value) => game.settings.get("alienrpg", "dollar")
+    ? Intl.NumberFormat("en-EN", { style: "currency", currency: "USD" }).format(value)
+    : Intl.NumberFormat("en-EN", { style: "decimal", useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 
   class AlienRPGCeckInput extends DataModel {
     static defineSchema() {
@@ -61,6 +65,54 @@ export default async function alienrpg() {
 
       uses: "attributes.rounds.value",
       maximumUses: "",
+
+      values: {
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: isWeapon,
+          path: "attributes.bonus.value",
+        },
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "number",
+          applies: isWeapon,
+          path: "attributes.damage.value",
+        },
+        range: {
+          label: "ripper-system-abstraction.item.values.range",
+          type: "number",
+          applies: isWeapon,
+          path: {
+            get: (item) => item.system.attributes.range.value,
+            set: (item, value) => {
+              const steps = Object.keys(item.type === "weapon" ? CONFIG.ALIENRPG.weapon_range_list : CONFIG.ALIENRPG.ship_weapon_range_list).map(Number);
+              return { "system.attributes.range.value": Math.clamp(value, Math.min(...steps), Math.max(...steps)) };
+            },
+          },
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "attributes.armorrating.value",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.system.attributes?.weight !== undefined,
+          path: "attributes.weight.value",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.attributes?.cost !== undefined,
+          path: {
+            get: (item) => Number(String(item.system.attributes.cost.value).replace(/[^0-9.-]+/g, "")) || 0,
+            set: (item, value) => ({ "system.attributes.cost.value": formatCost(value) }),
+          },
+        },
+      },
     },
 
     currency: {

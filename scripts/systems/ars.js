@@ -36,6 +36,9 @@ export default async function ars() {
   // Coins count unless stored ("nocarried"): ars creates coins with an empty location state and treats that as carried
   const coinItems = (actor) => actor.items.filter((item) => item.type === "currency"
     && (actor.type === "lootable" || item.system.location?.state !== "nocarried"));
+  const isPhysical = (item) => ["item", "container", "potion", "weapon", "armor"].includes(item.type);
+  // protection.ac only counts for body armor and shields; rings, cloaks and other wards use protection.modifier alone
+  const hasArmorClass = (item) => item.type === "armor" && ["armor", "shield"].includes(item.system.protection?.type);
 
   return {
     dataPaths: {
@@ -69,6 +72,69 @@ export default async function ars() {
 
       uses: "charges.value",
       maximumUses: "charges.max",
+
+      values: {
+        magicalBonus: {
+          label: "ripper-system-abstraction.item.values.magicalBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon" || item.type === "armor",
+          path: {
+            get: (item) => (item.type === "weapon" ? item.system.attack?.magicBonus : item.system.protection?.modifier) ?? null,
+            // a +N weapon adds N to both attack and damage rolls
+            set: (item, value) => (item.type === "weapon"
+              ? { "system.attack.magicBonus": value, "system.damage.magicBonus": value }
+              : { "system.protection.modifier": value }),
+          },
+        },
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "attack.modifier",
+        },
+        damageBonus: {
+          label: "ripper-system-abstraction.item.values.damageBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "damage.modifier",
+        },
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "damage.normal",
+        },
+        damageLarge: {
+          label: "ripper-system-abstraction.item.values.damageLarge",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "damage.large",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: hasArmorClass,
+          path: "protection.ac",
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: isPhysical,
+          path: "charges.max",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: isPhysical,
+          path: "weight",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: isPhysical,
+          path: "cost.value",
+        },
+      },
     },
 
     currency: {
@@ -123,14 +189,14 @@ export default async function ars() {
     },
 
     experience: {
-      current: "",
+      current: "details.xp",
       maximum: "",
     },
 
     overrides: {
       Actor: {
         npc: {
-          actor: { level: (actor) => parseInt(actor.system.hitdice) || null },
+          actor: { type: "details.type", level: (actor) => parseInt(actor.system.hitdice) || null },
         },
       },
     },

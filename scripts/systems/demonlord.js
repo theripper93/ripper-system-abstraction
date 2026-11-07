@@ -1,6 +1,16 @@
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
+// Armor protection is one of three numeric strings: fixed Defense, Agility bonus or Defense bonus (shields).
+const ARMOR_FIELDS = ["fixed", "agility", "defense"];
+const armorField = (item) => (item.type === "armor" ? ARMOR_FIELDS.find((key) => String(item.system[key] ?? "").trim() !== "") : undefined);
+
+// String fields the system reads with parseInt.
+const intString = (path) => ({
+  get: (item) => parseInt(foundry.utils.getProperty(item.system, path)) || 0,
+  set: (item, value) => ({ [`system.${path}`]: String(Math.round(Number(value) || 0)) }),
+});
+
 export default async function demonlord() {
 
   class DemonlordCheckInput extends DataModel {
@@ -122,6 +132,48 @@ export default async function demonlord() {
 
       uses: "activatedEffect.uses.value",
       maximumUses: "activatedEffect.uses.max",
+
+      values: {
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: intString("action.rollbonus"),
+        },
+        attackBoons: {
+          label: "ripper-system-abstraction.item.values.attackBoons",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: intString("action.boonsbanes"),
+        },
+        damageBonus: {
+          label: "ripper-system-abstraction.item.values.damageBonus",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "action.damage",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => !!armorField(item),
+          path: {
+            get: (item) => parseInt(item.system[armorField(item)]) || 0,
+            set: (item, value) => ({ [`system.${armorField(item)}`]: String(Math.round(Number(value) || 0)) }),
+          },
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "number",
+          applies: (item) => item.system.activatedEffect?.uses !== undefined && (item.type === "item" || item.system.activatedEffect.uses.max > 0),
+          path: "activatedEffect.uses.max",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => item.system.value !== undefined && ["weapon", "armor", "ammo", "item"].includes(item.type),
+          path: itemPrice,
+        },
+      },
     },
 
     currency: {
@@ -170,6 +222,7 @@ export default async function demonlord() {
     },
     testsInterface: {
     resultType: "total",
+    supportsAdvantage: true,
     rollInitiative: async (actor, combatant) => {
       const combat = combatant.combat;
       if (game.settings.get("demonlord", "optionalRuleInitiativeMode") !== "s") {
@@ -209,7 +262,7 @@ export default async function demonlord() {
 
       const roll = await actor.rollAttributeChallenge(
         attribute,
-        undefined,
+        (options.advantage ? 1 : 0) - (options.disadvantage ? 1 : 0),
         inputs.modifier ?? 0,
       );
 

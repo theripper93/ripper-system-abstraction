@@ -2,6 +2,19 @@ const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
 export default async function dnd4e() {
+  const PHYSICAL_TYPES = ["weapon", "equipment", "consumable", "tool", "backpack", "loot"];
+  const isArmour = (item) => item.type === "equipment" && item.system.armour?.type === "armour";
+  const isShield = (item) => item.type === "equipment" && item.system.armour?.type === "arms" && item.system.armour?.subtype in (CONFIG.DND4E.profArmor ?? {});
+  const isAmmo = (item) => item.type === "consumable" && item.system.consumableType === "ammo";
+  const baseDamage = (item) => (item.type === "weapon" ? item.system.damageDice?.parts?.[0] : null) ?? null;
+  const damagePart = (key) => ({
+    get: (item) => baseDamage(item)?.[key] ?? "",
+    set: (item, value) => {
+      const parts = foundry.utils.deepClone(item.system.damageDice.parts);
+      parts[0][key] = String(value);
+      return { "system.damageDice.parts": parts };
+    },
+  });
 
   class DND4ECheckInput extends DataModel {
     static defineSchema() {
@@ -79,6 +92,72 @@ export default async function dnd4e() {
 
       uses: "uses.value",
       maximumUses: "uses.max",
+
+      values: {
+        magicalBonus: {
+          label: "ripper-system-abstraction.item.values.magicalBonus",
+          type: "number",
+          applies: (item) => item.type === "weapon" || isAmmo(item) || isArmour(item) || (item.type === "equipment" && item.system.armour?.type === "neck"),
+          path: {
+            get: (item) => (item.type === "equipment" ? item.system.armour?.enhance : item.system.enhance) ?? 0,
+            set: (item, value) => ({ [item.type === "equipment" ? "system.armour.enhance" : "system.enhance"]: value }),
+          },
+        },
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "attackForm",
+        },
+        damageBonus: {
+          label: "ripper-system-abstraction.item.values.damageBonus",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "damageForm",
+        },
+        damageDice: {
+          label: "ripper-system-abstraction.item.values.damageDice",
+          type: "formula",
+          applies: (item) => !!baseDamage(item),
+          path: damagePart("numDice"),
+        },
+        damageDie: {
+          label: "ripper-system-abstraction.item.values.damageDie",
+          type: "formula",
+          applies: (item) => !!baseDamage(item),
+          path: damagePart("numFaces"),
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => isArmour(item) || isShield(item),
+          path: "armour.ac",
+        },
+        range: {
+          label: "ripper-system-abstraction.item.values.range",
+          type: "number",
+          applies: (item) => item.type === "weapon" && !!item.system.isRanged,
+          path: "range.value",
+        },
+        maximumUses: {
+          label: "ripper-system-abstraction.item.values.maximumUses",
+          type: "formula",
+          applies: (item) => ["weapon", "equipment", "consumable", "tool"].includes(item.type) && item.system.uses !== undefined,
+          path: "uses.max",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => PHYSICAL_TYPES.includes(item.type) && item.system.weight !== undefined,
+          path: "weight",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: (item) => PHYSICAL_TYPES.includes(item.type) && item.system.price !== undefined,
+          path: "price",
+        },
+      },
     },
 
     currency: {

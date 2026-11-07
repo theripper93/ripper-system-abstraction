@@ -2,6 +2,7 @@ const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
 export default async function swade() {
+  const isPhysical = (item) => ["weapon", "armor", "shield", "gear", "consumable"].includes(item.type);
   try {
     const pack = game.packs?.get?.("swade.skills");
     if (pack && !pack.indexed) await pack.getIndex();
@@ -52,6 +53,13 @@ export default async function swade() {
     };
   }
 
+  const firstCharge = (item) => (item.system.charges?.hasCharges ? item.system.charges.charges?.[0] : undefined);
+  const chargesWith = (item, change) => {
+    const charges = foundry.utils.deepClone(item._source.system.charges.charges);
+    Object.assign(charges[0], change);
+    return charges;
+  };
+
   return {
     dataPaths: {
     actor: {
@@ -81,8 +89,65 @@ export default async function swade() {
       unequippedValue: 0,
       attuned: "",
 
-      uses: "",
-      maximumUses: "",
+      uses: {
+        get: (item) => (item.system.shots > 0 ? item.system.currentShots : firstCharge(item)?.value),
+        set: (item, value) => (item.system.shots > 0 ? { "system.currentShots": value } : { "system.charges.charges": chargesWith(item, { value }) }),
+      },
+      maximumUses: {
+        get: (item) => (item.system.shots > 0 ? item.system.shots : firstCharge(item)?.max),
+        set: (item, value) => (item.system.shots > 0 ? { "system.shots": value } : { "system.charges.charges": chargesWith(item, { max: value }) }),
+      },
+
+      values: {
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "damage",
+        },
+        attackBonus: {
+          label: "ripper-system-abstraction.item.values.attackBonus",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "actions.traitMod",
+        },
+        damageBonus: {
+          label: "ripper-system-abstraction.item.values.damageBonus",
+          type: "formula",
+          applies: (item) => item.type === "weapon",
+          path: "actions.dmgMod",
+        },
+        armorPenetration: {
+          label: "ripper-system-abstraction.item.values.armorPenetration",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "ap",
+        },
+        parry: {
+          label: "ripper-system-abstraction.item.values.parry",
+          type: "number",
+          applies: (item) => item.type === "weapon" || item.type === "shield",
+          path: "parry",
+        },
+        armorClass: {
+          label: "ripper-system-abstraction.item.values.armorClass",
+          type: "number",
+          applies: (item) => item.type === "armor",
+          path: "armor",
+        },
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: isPhysical,
+          path: "weight",
+        },
+        price: {
+          label: "ripper-system-abstraction.item.values.price",
+          type: "number",
+          applies: isPhysical,
+          path: "price",
+        },
+      },
     },
 
     currency: {

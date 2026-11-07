@@ -84,6 +84,21 @@ export default async function anarchy() {
 
       uses: "",
       maximumUses: "",
+
+      values: {
+        damage: {
+          label: "ripper-system-abstraction.item.values.damage",
+          type: "number",
+          applies: (item) => item.type === "weapon",
+          path: "damage",
+        },
+        rating: {
+          label: "ripper-system-abstraction.item.values.rating",
+          type: "number",
+          applies: (item) => item.type === "shadowamp",
+          path: "level",
+        },
+      },
     },
 
     currency: {

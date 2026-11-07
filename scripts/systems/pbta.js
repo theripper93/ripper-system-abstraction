@@ -17,6 +17,9 @@ export default async function pbta() {
 
   const PBTa_OUTCOME_LEVELS = { failure: 0, partial: 50, success: 100, critical: 100 };
 
+  const harm = (actor) => (Number.isFinite(actor.system.attributes?.harm?.max) ? actor.system.attributes.harm : null);
+  const xpKey = (actor) => Object.entries(actor.system.attributes ?? {}).find(([, attribute]) => attribute?.type === "Xp")?.[0];
+
   return {
     dataPaths: {
     actor: {
@@ -33,8 +36,12 @@ export default async function pbta() {
       temporary: "",
       minimum: "",
 
-      wounds: "",
-      maximumWounds: "",
+      wounds: {
+        get: (actor) => harm(actor)?.value ?? null,
+        set: (actor, value) => ({ "system.attributes.harm.value": value }),
+      },
+      maximumWounds: (actor) => harm(actor)?.max ?? null,
+      primary: "wounds",
     },
 
     item: {
@@ -46,6 +53,15 @@ export default async function pbta() {
 
       uses: "uses",
       maximumUses: "",
+
+      values: {
+        weight: {
+          label: "ripper-system-abstraction.item.values.weight",
+          type: "number",
+          applies: (item) => item.type === "equipment",
+          path: "weight",
+        },
+      },
     },
 
     currency: {
@@ -68,15 +84,18 @@ export default async function pbta() {
     },
 
     experience: {
-      current: "",
-      maximum: "",
+      current: {
+        get: (actor) => (xpKey(actor) ? actor.system.attributes[xpKey(actor)].value : null),
+        set: (actor, value) => ({ [`system.attributes.${xpKey(actor)}.value`]: value }),
+      },
+      maximum: (actor) => (xpKey(actor) ? actor.system.attributes[xpKey(actor)].max ?? null : null),
       level: "",
     },
 
     features: {
       supportsHealth: false,
       supportsTemporaryHealth: false,
-      supportsWounds: false,
+      supportsWounds: true,
       supportsCurrency: false,
       supportsWeight: true,
       supportsEquipment: false,
@@ -84,6 +103,7 @@ export default async function pbta() {
     },
     testsInterface: {
     resultType: "outcome",
+    supportsAdvantage: true,
     buildInputs: () => {
       const choices = {};
 
@@ -116,8 +136,9 @@ export default async function pbta() {
       const roll = new CONFIG.Dice.RollPbtA(
         actor._getStatFormula(inputs.check),
         actor.getRollData(),
-        { rollType: "stat", stat: inputs.check },
+        { rollType: "stat", stat: inputs.check, conditions: [], conditionsConsumed: [], rollMode: options.advantage === options.disadvantage ? "def" : options.advantage ? "adv" : "dis" },
       );
+      if (roll.options.rollMode !== "def") roll.configureModifiers();
       await roll.evaluate();
       if (!options.silent) await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
 
