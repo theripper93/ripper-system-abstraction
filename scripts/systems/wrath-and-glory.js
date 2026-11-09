@@ -35,6 +35,20 @@ const GENERIC_TESTS = [
   ["mutation", "ROLL.MUTATION", "ROLL.CONVICTION"],
 ];
 
+const isRanged = (item) => item.type === "weapon" && item.system.category === "ranged";
+
+function scaleRange(item, value) {
+  const range = item.system.range;
+  const long = Math.max(0, Math.round(Number(value) || 0));
+  const ratio = range.long > 0 ? long / range.long : 0;
+  const scaled = (current, fallback) => (ratio ? Math.round((Number(current) || 0) * ratio) : Math.round(long * fallback));
+  return {
+    "system.range.short": scaled(range.short, 1 / 3),
+    "system.range.medium": scaled(range.medium, 2 / 3),
+    "system.range.long": long,
+  };
+}
+
 const CANCELED = {
   canceled: true,
   result: null,
@@ -141,6 +155,51 @@ export default async function wrathAndGlory() {
         maximumUses: (item) => {
           const max = Number(item.system?.uses?.max);
           return Number.isFinite(max) && max > 0 ? max : null;
+        },
+
+        values: {
+          damage: {
+            label: "ripper-system-abstraction.item.values.damage",
+            type: "number",
+            applies: (item) => item.type === "weapon",
+            path: "damage.base",
+          },
+          damageDice: {
+            label: "ripper-system-abstraction.item.values.damageDice",
+            type: "number",
+            applies: (item) => item.type === "weapon",
+            path: "damage.ed.base",
+          },
+          armorPenetration: {
+            label: "ripper-system-abstraction.item.values.armorPenetration",
+            type: "number",
+            applies: (item) => item.type === "weapon",
+            path: "damage.ap.base",
+          },
+          range: {
+            label: "ripper-system-abstraction.item.values.range",
+            type: "number",
+            applies: isRanged,
+            path: { get: (item) => item.system.range.long, set: scaleRange },
+          },
+          fireRate: {
+            label: "ripper-system-abstraction.item.values.fireRate",
+            type: "number",
+            applies: isRanged,
+            path: "salvo",
+          },
+          armorClass: {
+            label: "ripper-system-abstraction.item.values.armorClass",
+            type: "number",
+            applies: (item) => item.type === "armour",
+            path: "rating",
+          },
+          price: {
+            label: "ripper-system-abstraction.item.values.price",
+            type: "number",
+            applies: (item) => !!item.system.schema?.fields?.value,
+            path: "value",
+          },
         },
       },
 

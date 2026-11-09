@@ -241,6 +241,51 @@ export default async function dragonbane() {
           set: (item, value) => ({ "system.enchantments.charge": Math.max(0, Math.round(value)) }),
         },
         maximumUses: "",
+
+        values: {
+          damage: {
+            label: "ripper-system-abstraction.item.values.damage",
+            type: "formula",
+            applies: (item) => item.type === "weapon",
+            path: "damage",
+          },
+          armorClass: {
+            label: "ripper-system-abstraction.item.values.armorClass",
+            type: "number",
+            applies: (item) => item.type === "armor" || item.type === "helmet",
+            path: "rating",
+          },
+          range: {
+            label: "ripper-system-abstraction.item.values.range",
+            type: "number",
+            applies: (item) => item.type === "weapon" && Number.isNumeric(item.system.range),
+            path: {
+              get: (item) => Number(item.system.range),
+              set: (item, value) => ({ "system.range": String(Math.max(0, Math.round(Number(value) || 0))) }),
+            },
+          },
+          durability: {
+            label: "ripper-system-abstraction.item.values.durability",
+            type: "number",
+            applies: (item) => item.type === "weapon",
+            path: "durability",
+          },
+          weight: {
+            label: "ripper-system-abstraction.item.values.weight",
+            type: "number",
+            applies: (item) => item.system.weight !== undefined,
+            path: "weight",
+          },
+          price: {
+            label: "ripper-system-abstraction.item.values.price",
+            type: "number",
+            applies: (item) => item.system.cost !== undefined,
+            path: {
+              get: (item) => parseCost(item.system.cost) ?? 0,
+              set: (item, value) => ({ "system.cost": formatCost(value) }),
+            },
+          },
+        },
       },
 
       currency: {
