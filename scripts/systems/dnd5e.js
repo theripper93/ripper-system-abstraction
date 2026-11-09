@@ -106,6 +106,20 @@ export default async function dnd5e() {
             set: (item, value) => ({ [item.type === "weapon" ? "system.magicalBonus" : "system.armor.magicalBonus"]: value }),
           },
         },
+        magical: {
+          label: "ripper-system-abstraction.item.values.magical",
+          type: "number",
+          applies: (item) => !!CONFIG.DND5E.validProperties[item.type]?.has("mgc"),
+          path: {
+            get: (item) => (item.system.properties?.has("mgc") ? 1 : 0),
+            set: (item, value) => {
+              const properties = new Set(item.system.properties ?? []);
+              if (Number(value) > 0) properties.add("mgc");
+              else properties.delete("mgc");
+              return { "system.properties": [...properties] };
+            },
+          },
+        },
         attackBonus: {
           label: "ripper-system-abstraction.item.values.attackBonus",
           type: "formula",

@@ -49,6 +49,7 @@
         "item": {
             "values": {
                 "magicalBonus": "Magical Bonus",
+                "magical": "Magical Property (1 = on, 0 = off)",
                 "attackBonus": "Attack Bonus",
                 "damageBonus": "Damage Bonus",
                 "damageDice": "Damage Dice",
