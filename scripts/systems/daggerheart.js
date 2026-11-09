@@ -1,3 +1,5 @@
+import { toDieSize } from "./_shared.js";
+
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
@@ -26,7 +28,7 @@ export default async function daggerheart() {
   const coins = Object.entries(COIN_VALUES).filter(([key]) => homebrewCurrency[key]?.enabled !== false);
   const [base = "coins", baseValue = 1] = coins[0] ?? [];
   const isWeapon = (item) => item.type === "weapon";
-  const nearestDie = (value) => [4, 6, 8, 10, 12, 20].reduce((best, die) => (Math.abs(die - value) < Math.abs(best - value) ? die : best));
+  const DAMAGE_DICE = CONFIG.DH.GENERAL?.dieFaces ?? [4, 6, 8, 10, 12, 20];
 
   class DaggerheartCheckInput extends DataModel {
     static defineSchema() {
@@ -113,7 +115,7 @@ export default async function daggerheart() {
           applies: (item) => isWeapon(item) && !!item.system.attack?.damage?.main?.value?.dice,
           path: {
             get: (item) => Number(item.system.attack.damage.main.value.dice.slice(1)),
-            set: (item, value) => ({ "system.attack.damage.main.value.dice": `d${nearestDie(value)}` }),
+            set: (item, value) => ({ "system.attack.damage.main.value.dice": `d${toDieSize(DAMAGE_DICE, value, Number(item.system.attack.damage.main.value.dice.slice(1)))}` }),
           },
         },
         armorClass: {

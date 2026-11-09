@@ -1,9 +1,12 @@
+import { toDieSize } from "./_shared.js";
+
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
 export default async function shadowdark() {
   const isMainArmor = (item) => item.type === "Armor" && !!item.system.ac?.base;
   const dieSize = (die) => Number(/^d(\d+)$/.exec(die ?? "")?.[1]) || null;
+  const DAMAGE_DICE = Object.keys(CONFIG.SHADOWDARK.WEAPON_BASE_DAMAGE ?? {}).map(dieSize).filter(Boolean);
   // The weapon's main damage die key ("d6"): one-handed, or two-handed for two-handed-only weapons.
   const mainDieKey = (item) => (dieSize(item.system.damage?.oneHanded) ? "oneHanded" : dieSize(item.system.damage?.twoHanded) ? "twoHanded" : null);
 
@@ -119,12 +122,18 @@ export default async function shadowdark() {
           applies: (item) => item.type === "Weapon" && !!mainDieKey(item),
           path: {
             get: (item) => dieSize(item.system.damage[mainDieKey(item)]),
-            // A versatile weapon's two-handed die moves by the same number of faces.
+            // A versatile weapon's two-handed die moves by the same number of sizes.
             set: (item, value) => {
               const key = mainDieKey(item);
-              const changes = { [`system.damage.${key}`]: `d${value}` };
+              const current = dieSize(item.system.damage[key]);
+              const size = toDieSize(DAMAGE_DICE, value, current);
+              const changes = { [`system.damage.${key}`]: `d${size}` };
               const other = dieSize(item.system.damage.twoHanded);
-              if (key === "oneHanded" && other) changes["system.damage.twoHanded"] = `d${other + value - dieSize(item.system.damage.oneHanded)}`;
+              if (key === "oneHanded" && other) {
+                const steps = DAMAGE_DICE.indexOf(size) - DAMAGE_DICE.indexOf(toDieSize(DAMAGE_DICE, current, current));
+                const index = DAMAGE_DICE.indexOf(toDieSize(DAMAGE_DICE, other, other)) + steps;
+                changes["system.damage.twoHanded"] = `d${DAMAGE_DICE[Math.clamp(index, 0, DAMAGE_DICE.length - 1)]}`;
+              }
               return changes;
             },
           },

@@ -35,7 +35,8 @@ export default async function shadowrun5e() {
   return {
     dataPaths: {
     actor: {
-      type: "metatype",
+      type: ["metatype", "spiritType", "spriteType"],
+      typeChoices: () => ({ ...CONFIG.SR5.character.types, ...CONFIG.SR5.spiritTypes, ...CONFIG.SR5.spriteTypes }),
       subtype: "",
       size: "",
       level: "",

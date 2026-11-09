@@ -1,3 +1,5 @@
+import { toDieSize } from "./_shared.js";
+
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
@@ -129,7 +131,10 @@ export default async function dnd5e() {
           label: "ripper-system-abstraction.item.values.damageDie",
           type: "number",
           applies: (item) => item.type === "weapon" && item.system.damage?.base?.denomination != null,
-          path: "damage.base.denomination",
+          path: {
+            get: (item) => item.system.damage.base.denomination,
+            set: (item, value) => ({ "system.damage.base.denomination": toDieSize(CONFIG.DND5E.dieSteps, value, item.system.damage.base.denomination) }),
+          },
         },
         armorClass: {
           label: "ripper-system-abstraction.item.values.armorClass",

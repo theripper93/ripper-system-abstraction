@@ -25,3 +25,11 @@ export async function captureRollMessage(trigger, options = {}, timeout = 3000) 
   }
   return posted ?? suppressed?.[start] ?? null;
 }
+
+export function toDieSize(sizes, value, current) {
+  const sorted = sizes.map(Number).sort((a, b) => a - b);
+  const size = Number(value) || 0;
+  if (size > current) return sorted.find((s) => s >= size) ?? sorted.at(-1);
+  if (size < current) return sorted.findLast((s) => s <= size) ?? sorted[0];
+  return sorted.reduce((best, s) => (Math.abs(s - size) <= Math.abs(best - size) ? s : best));
+}

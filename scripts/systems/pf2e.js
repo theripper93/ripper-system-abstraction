@@ -1,7 +1,10 @@
+import { toDieSize } from "./_shared.js";
+
 const { DataModel } = foundry.abstract;
 const fields = foundry.data.fields;
 
 export default async function pf2e() {
+  const DAMAGE_DICE = CONFIG.PF2E.damageDie ? Object.keys(CONFIG.PF2E.damageDie).map((key) => Number(key.slice(1))) : [4, 6, 8, 10, 12];
 
   class PF2ECheckInput extends DataModel {
     static defineSchema() {
@@ -229,7 +232,7 @@ export default async function pf2e() {
           applies: (item) => item.type === "weapon" && !!item._source.system.damage?.die,
           path: {
             get: (item) => Number(item._source.system.damage.die.slice(1)),
-            set: (item, value) => ({ "system.damage.die": `d${value}` }),
+            set: (item, value) => ({ "system.damage.die": `d${toDieSize(DAMAGE_DICE, value, Number(item._source.system.damage.die.slice(1)))}` }),
           },
         },
         range: {
@@ -382,12 +385,12 @@ export default async function pf2e() {
       };
     },
 
-    initiativeOptions: (options = {}) => ({ skipDialog: options.fastForward ?? false, rollTwice: rollTwice(options) }),
+    initiativeOptions: (options = {}) => ({ skipDialog: options.fastForward ? true : undefined, rollTwice: rollTwice(options) }),
 
     processCheck: async (actor, inputs, options = {}) => {
       const [type, key] = inputs.check.split(".");
       const rollOptions = {
-        skipDialog: options.fastForward ?? false,
+        skipDialog: options.fastForward ? true : undefined,
         event: options.event,
         rollTwice: rollTwice(options),
       };
