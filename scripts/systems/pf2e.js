@@ -5,6 +5,7 @@ const fields = foundry.data.fields;
 
 export default async function pf2e() {
   const DAMAGE_DICE = CONFIG.PF2E.damageDie ? Object.keys(CONFIG.PF2E.damageDie).map((key) => Number(key.slice(1))) : [4, 6, 8, 10, 12];
+  const RANGE_INCREMENTS = [10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 140, 150, 180, 200, 240, 300];
 
   class PF2ECheckInput extends DataModel {
     static defineSchema() {
@@ -39,10 +40,16 @@ export default async function pf2e() {
     set: (item, value) => ({ [`system.price.value.${denomination}`]: value }),
   });
 
-  const sourceValue = (path) => ({
+  const sourceValue = (path, snap) => ({
     get: (item) => foundry.utils.getProperty(item._source.system, path),
-    set: (item, value) => ({ [`system.${path}`]: value }),
+    set: (item, value) => {
+      if (!snap) return { [`system.${path}`]: value };
+      const current = foundry.utils.getProperty(item._source.system, path);
+      return { [`system.${path}`]: Number.isNumeric(value) ? snap(Number(value), current) : current };
+    },
   });
+  const runeGrade = (value) => Math.clamp(Math.round(value), 0, 4);
+  const rangeIncrement = (value, current) => toDieSize(RANGE_INCREMENTS, value, current);
   const isPhysical = (item) => item.isOfType?.("physical") ?? false;
 
   function rollTwice(options) {
@@ -200,19 +207,19 @@ export default async function pf2e() {
           label: "ripper-system-abstraction.item.values.magicalBonus",
           type: "number",
           applies: (item) => item.type === "weapon" || item.type === "armor",
-          path: sourceValue("runes.potency"),
+          path: sourceValue("runes.potency", runeGrade),
         },
         strikingRune: {
           label: "ripper-system-abstraction.item.values.strikingRune",
           type: "number",
           applies: (item) => item.type === "weapon",
-          path: sourceValue("runes.striking"),
+          path: sourceValue("runes.striking", runeGrade),
         },
         resilientRune: {
           label: "ripper-system-abstraction.item.values.resilientRune",
           type: "number",
           applies: (item) => item.type === "armor",
-          path: sourceValue("runes.resilient"),
+          path: sourceValue("runes.resilient", runeGrade),
         },
         attackBonus: {
           label: "ripper-system-abstraction.item.values.attackBonus",
@@ -239,7 +246,7 @@ export default async function pf2e() {
           label: "ripper-system-abstraction.item.values.range",
           type: "number",
           applies: (item) => item.type === "weapon" && item._source.system.range != null,
-          path: sourceValue("range"),
+          path: sourceValue("range", rangeIncrement),
         },
         armorClass: {
           label: "ripper-system-abstraction.item.values.armorClass",

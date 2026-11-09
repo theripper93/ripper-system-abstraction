@@ -41,6 +41,33 @@ export default async function wildtalents() {
     }
   }
 
+  const partWounds = (part) => Math.min(part.boxes, part.shockDamage + part.killingDamage);
+
+  function setSilhouetteWounds(actor, value) {
+    if (!actor.system.silhouette?.length) return {};
+    const parts = actor.system.silhouette.map((part) => {
+      const killingDamage = Math.min(part.killingDamage, part.boxes);
+      return { ...part, killingDamage, shockDamage: Math.min(part.shockDamage, part.boxes - killingDamage) };
+    });
+    const total = parts.reduce((sum, part) => sum + part.boxes, 0);
+    const current = parts.reduce((sum, part) => sum + partWounds(part), 0);
+    const order = parts.map((_, index) => index).sort((a, b) => parts[a].important - parts[b].important);
+    let change = Math.clamp(value, 0, total) - current;
+    for (const index of order) {
+      const added = Math.min(Math.max(change, 0), parts[index].boxes - partWounds(parts[index]));
+      parts[index].shockDamage += added;
+      change -= added;
+    }
+    for (const key of ["shockDamage", "killingDamage"]) {
+      for (const index of order.toReversed()) {
+        const removed = Math.min(Math.max(-change, 0), parts[index][key]);
+        parts[index][key] -= removed;
+        change += removed;
+      }
+    }
+    return { "system.silhouette": parts };
+  }
+
   return {
     dataPaths: {
     actor: {
@@ -57,8 +84,12 @@ export default async function wildtalents() {
       temporary: "",
       minimum: "",
 
-      wounds: "silhouette",
-      maximumWounds: "",
+      wounds: {
+        get: (actor) => (actor.system.silhouette?.length ? actor.system.silhouette.reduce((total, part) => total + partWounds(part), 0) : null),
+        set: (actor, value) => setSilhouetteWounds(actor, value),
+      },
+      maximumWounds: (actor) => (actor.system.silhouette?.length ? actor.system.silhouette.reduce((total, part) => total + part.boxes, 0) : null),
+      primary: "wounds",
     },
 
     item: {

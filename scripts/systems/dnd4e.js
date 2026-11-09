@@ -250,7 +250,7 @@ export default async function dnd4e() {
     processCheck: async (actor, inputs, options = {}) => {
       const [type, key] = inputs.check.split(".");
       const rollOptions = {
-        fastForward: options.fastForward ?? false,
+        fastForward: options.fastForward ? true : undefined,
         event: options.event,
       };
       if (inputs.dc != null) rollOptions.dc = inputs.dc;

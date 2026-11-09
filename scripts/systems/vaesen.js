@@ -25,6 +25,26 @@ export default async function vaesen() {
     set: (item, value) => ({ [`system.${path}`]: value }),
   });
 
+  const PHYSICAL_STEPS = ["states.exhausted.isChecked", "states.battered.isChecked", "states.wounded.isChecked", "isBroken"];
+  const physicalSteps = (actor) => PHYSICAL_STEPS.map((step) => !!foundry.utils.getProperty(actor.system.condition.physical, step));
+
+  function setPhysicalWounds(actor, value) {
+    if (!actor.system.condition?.physical?.states) return {};
+    const checked = physicalSteps(actor);
+    let change = Math.clamp(value, 0, PHYSICAL_STEPS.length) - checked.filter(Boolean).length;
+    for (const index of PHYSICAL_STEPS.keys()) {
+      if (change <= 0 || checked[index]) continue;
+      checked[index] = true;
+      change--;
+    }
+    for (const index of [...PHYSICAL_STEPS.keys()].reverse()) {
+      if (change >= 0 || !checked[index]) continue;
+      checked[index] = false;
+      change++;
+    }
+    return Object.fromEntries(PHYSICAL_STEPS.map((step, index) => [`system.condition.physical.${step}`, checked[index]]));
+  }
+
   return {
     dataPaths: {
     actor: {
@@ -111,10 +131,28 @@ export default async function vaesen() {
       level: "",
     },
 
+    overrides: {
+      Actor: {
+        npc: {
+          health: { current: "condition.physical.value", maximum: "condition.physical.max" },
+        },
+        player: {
+          health: {
+            wounds: {
+              get: (actor) => (actor.system.condition?.physical?.states ? physicalSteps(actor).filter(Boolean).length : null),
+              set: (actor, value) => setPhysicalWounds(actor, value),
+            },
+            maximumWounds: (actor) => (actor.system.condition?.physical?.states ? PHYSICAL_STEPS.length : null),
+            primary: "wounds",
+          },
+        },
+      },
+    },
+
     features: {
-      supportsHealth: false,
+      supportsHealth: true,
       supportsTemporaryHealth: false,
-      supportsWounds: false,
+      supportsWounds: true,
       supportsCurrency: false,
       supportsWeight: false,
       supportsEquipment: false,

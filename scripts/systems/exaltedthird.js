@@ -160,6 +160,14 @@ export default async function exaltedthird() {
     },
     testsInterface: {
     resultType: "successes",
+    rollInitiative: async (actor, combatant, options = {}) => {
+      const roller = combatant.actor ?? actor;
+      if (options.fastForward || typeof roller.actionRoll !== "function") {
+        await foundry.documents.Combat.prototype.rollInitiative.call(combatant.combat, [combatant.id], { updateTurn: false });
+        return;
+      }
+      await roller.actionRoll({ rollType: "joinBattle", pool: "joinbattle", actorCombatant: combatant });
+    },
     buildInputs: () => {
       const choices = {};
       const group = {

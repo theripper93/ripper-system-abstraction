@@ -104,6 +104,10 @@ export default async function pbta() {
     testsInterface: {
     resultType: "outcome",
     supportsAdvantage: true,
+    // Fallback: PbtA has no initiative roll, its combatant initiative counts moves.
+    rollInitiative: async (actor, combatant) => {
+      if (!Number.isFinite(combatant.initiative)) await combatant.update({ initiative: 0 });
+    },
     buildInputs: () => {
       const choices = {};
 

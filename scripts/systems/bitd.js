@@ -138,6 +138,8 @@ export default async function bitd() {
 
     testsInterface: {
       resultType: "outcome",
+      // Fallback: BitD has no initiative roll.
+      initiativeOptions: () => ({ formula: "1d6" }),
       buildInputs: () => {
         const choices = {};
         const group = {

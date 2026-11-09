@@ -181,7 +181,11 @@ export default async function a5e() {
           applies: (item) => item.type === "object" && !!attackRange(item),
           path: {
             get: (item) => attackRange(item).value,
-            set: (item, value) => ({ [attackRange(item).key]: value }),
+            set: (item, value) => {
+              const { key, value: current } = attackRange(item);
+              const number = Number.isNumeric(value) ? Math.max(0, Math.round(Number(value))) : current;
+              return { [key]: number };
+            },
           },
         },
         armorClass: {
