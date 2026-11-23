@@ -202,6 +202,8 @@ export default async function pf2e() {
       uses: "uses.value",
       maximumUses: "uses.max",
 
+      container: "containerId",
+
       values: {
         magicalBonus: {
           label: "ripper-system-abstraction.item.values.magicalBonus",

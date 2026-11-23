@@ -145,6 +145,10 @@
  * maximumUses:
  *   Maximum uses/charges.
  *
+ * container (optional):
+ *   The id of the container Item holding this Item, on the same Actor (or in
+ *   the world Items). Leave out when the system has no containers.
+ *
  * fromSpell (optional object):
  *   For systems that turn a spell dropped into an inventory into another
  *   item (spell scrolls, wands, potions). Leave out when the system has no
@@ -356,6 +360,8 @@ export default async function systemAdapter() {
 
     uses: "",
     maximumUses: "",
+
+    container: "",
   },
 
   // -------------------------------------------------------------------------

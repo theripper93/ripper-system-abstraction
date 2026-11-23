@@ -270,6 +270,38 @@ export const item = {
   },
 
   // ---------------------------------------------------------------
+  // Containers
+  // ---------------------------------------------------------------
+
+  /**
+   * The Items directly inside this Item. Empty when the system has no
+   * containers or the Item is not one.
+   *
+   * @param {Item} item
+   * @returns {Item[]}
+   */
+  getContents(item) {
+    const spec = itemConfig(resolveDataPaths(item)).container;
+    if (!spec || !item.collection) return [];
+    return item.collection.filter((other) => other !== item && getPath(other, itemConfig(resolveDataPaths(other)).container) === item.id);
+  },
+
+  /**
+   * Take the Item out of its container. Nothing changes when the system has
+   * no containers or the Item is not inside one.
+   *
+   * @param {Item} item
+   * @param {Object} [options]
+   * @param {boolean} [options.update=true]
+   * @returns {Promise<Item|Object<string,*>>}
+   */
+  removeFromContainer(item, options = {}) {
+    const spec = itemConfig(resolveDataPaths(item)).container;
+    const changes = spec && getPath(item, spec) != null ? setPath(item, spec, null) : {};
+    return executeUpdate(item, changes, options);
+  },
+
+  // ---------------------------------------------------------------
   // Weight
   // ---------------------------------------------------------------
 

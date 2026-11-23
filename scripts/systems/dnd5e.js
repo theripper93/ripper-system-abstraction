@@ -96,6 +96,8 @@ export default async function dnd5e() {
       usesSpent: "uses.spent",
       maximumUses: "uses.max",
 
+      container: "container",
+
       values: {
         magicalBonus: {
           label: "ripper-system-abstraction.item.values.magicalBonus",
