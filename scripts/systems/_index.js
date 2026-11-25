@@ -33,6 +33,7 @@ import wfrp4e from "./wfrp4e.js";
 import wildtalents from "./wildtalents.js";
 import worldbuilding from "./worldbuilding.js";
 import wrathAndGlory from "./wrath-and-glory.js";
+import { effectiveDataPaths, getNamedChecks } from "../userConfig.js";
 
 const factories = {
   a5e,
@@ -101,16 +102,60 @@ class DefaultDCInput extends DataModel {
   }
 }
 
+const CUSTOM_CHECK = "custom";
+
+class DefaultCheckInput extends DataModel {
+  static defineSchema() {
+    return {
+      value: new fields.StringField({
+        label: "ripper-system-abstraction.tests.Check",
+        required: true,
+        blank: false,
+        initial: CUSTOM_CHECK,
+        choices: () => ({
+          ...Object.fromEntries(getNamedChecks().map((check) => [check.id, check.label])),
+          [CUSTOM_CHECK]: game.i18n.localize("ripper-system-abstraction.tests.CustomFormula"),
+        }),
+      }),
+    };
+  }
+}
+
+const CANCELED_CHECK = {
+  canceled: true,
+  result: null,
+  target: null,
+  success: null,
+  levelOfSuccess: null,
+  criticalSuccess: false,
+  criticalFailure: false,
+};
+
+/**
+ * The tests interface used when the system adapter provides none: rolls a
+ * formula with the actor's roll data. When the GM defined named checks
+ * (system configuration), a `check` input picks one of them or the custom
+ * formula; values serialized without `check` roll their formula.
+ */
 export const defaultTestsInterface = {
   resultType: "total",
 
-  buildInputs: () => ({
-    formula: DefaultFormulaInput,
-    dc: DefaultDCInput,
-  }),
+  buildInputs: () => (getNamedChecks().length
+    ? { check: DefaultCheckInput, formula: DefaultFormulaInput, dc: DefaultDCInput }
+    : { formula: DefaultFormulaInput, dc: DefaultDCInput }),
 
   processCheck: async (actor, inputs, options = {}) => {
-    const roll = await new foundry.dice.Roll(inputs.formula, actor.getRollData?.()).evaluate();
+    let formula = inputs.formula;
+    if (inputs.check && inputs.check !== CUSTOM_CHECK) {
+      const check = getNamedChecks().find((entry) => entry.id === inputs.check);
+      if (!check) {
+        console.warn(`[Ripper System Abstraction] Named check "${inputs.check}" no longer exists; the check was canceled.`);
+        return { ...CANCELED_CHECK };
+      }
+      formula = check.formula;
+    }
+
+    const roll = await new foundry.dice.Roll(formula, actor.getRollData?.()).evaluate();
     if (!options.silent) await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }) });
 
     const target = Number.isNumeric(inputs.dc) ? inputs.dc : null;
@@ -154,11 +199,22 @@ export function getCurrentSystem() {
 }
 
 /**
- * The loaded system's dataPaths, or null when not loaded.
+ * The effective base dataPaths: the empty template, the loaded adapter's
+ * dataPaths (if any) and the GM's user mapping. Never null.
+ *
+ * @returns {Object}
+ */
+export function getDataPaths() {
+  return effectiveDataPaths(current?.dataPaths ?? null);
+}
+
+/**
+ * The loaded adapter's own dataPaths, without the user mapping, or null when
+ * no adapter is loaded.
  *
  * @returns {Object|null}
  */
-export function getDataPaths() {
+export function getAdapterDataPaths() {
   return current?.dataPaths ?? null;
 }
 

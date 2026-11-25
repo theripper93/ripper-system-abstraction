@@ -1,0 +1,131 @@
+<div class="rsa-config-body scrollable">
+  {{#each sections as |rows tab|}}
+  {{#unless (eq tab "currency")}}{{#unless (eq tab "checks")}}
+  <section class="tab {{lookup (lookup @root.tabs tab) "cssClass"}}" data-tab="{{tab}}" data-group="sheet">
+    <p class="hint">{{localize (concat "ripper-system-abstraction.systemConfig.intro." tab)}}</p>
+    {{#each rows}}{{> "modules/ripper-system-abstraction/templates/system-config/field.hbs"}}{{/each}}
+
+    {{#if (eq tab "health")}}
+    <fieldset>
+      <legend>{{localize "ripper-system-abstraction.systemConfig.options.legend"}}</legend>
+      <div class="form-group">
+        <label data-tooltip="{{localize "ripper-system-abstraction.systemConfig.options.primary.hint"}}">{{localize "ripper-system-abstraction.systemConfig.options.primary.label"}}</label>
+        <div class="form-fields">
+          <select name="options.health.primary">{{selectOptions @root.healthOptions.primaryChoices selected=@root.healthOptions.primary}}</select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label data-tooltip="{{localize "ripper-system-abstraction.systemConfig.options.invert.hint"}}">{{localize "ripper-system-abstraction.systemConfig.options.invert.label"}}</label>
+        <div class="form-fields">
+          <select name="options.health.invert">{{selectOptions @root.healthOptions.invertChoices selected=@root.healthOptions.invert}}</select>
+        </div>
+      </div>
+    </fieldset>
+    {{/if}}
+
+    {{#if (eq tab "actor")}}
+    <fieldset>
+      <legend>{{localize "ripper-system-abstraction.systemConfig.sizes.legend"}}</legend>
+      {{#if @root.sizes.adapter}}<p class="hint">{{localize "ripper-system-abstraction.systemConfig.sizes.system"}} {{@root.sizes.adapter}}</p>{{/if}}
+      <table class="rsa-table">
+        <thead>
+          <tr>
+            <th>{{localize "ripper-system-abstraction.systemConfig.sizes.key"}}</th>
+            <th>{{localize "ripper-system-abstraction.systemConfig.sizes.value"}}</th>
+            <th class="rsa-controls"><button type="button" class="inline-control icon fa-solid fa-plus" data-action="addSize" data-tooltip aria-label="{{localize "ripper-system-abstraction.systemConfig.sizes.add"}}"></button></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each @root.sizes.rows}}
+          <tr>
+            <td><input type="text" name="options.actor.sizes.{{@index}}.key" value="{{this.key}}"></td>
+            <td><input type="number" name="options.actor.sizes.{{@index}}.value" value="{{this.value}}" min="0" step="any"></td>
+            <td class="rsa-controls"><button type="button" class="inline-control icon fa-solid fa-trash" data-action="removeSize" data-index="{{@index}}" data-tooltip aria-label="{{localize "ripper-system-abstraction.systemConfig.remove"}}"></button></td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </fieldset>
+    {{/if}}
+  </section>
+  {{/unless}}{{/unless}}
+  {{/each}}
+
+  <section class="tab {{tabs.currency.cssClass}}" data-tab="currency" data-group="sheet">
+    <p class="hint">{{localize "ripper-system-abstraction.systemConfig.intro.currency"}}</p>
+    {{#if currency.handler}}<p class="notification warning">{{localize "ripper-system-abstraction.systemConfig.currency.handlerWarning"}}</p>{{/if}}
+    <input type="hidden" name="currency.base" value="{{currency.base}}">
+    <table class="rsa-table rsa-coins">
+      <thead>
+        <tr>
+          <th data-needed="currency">{{localize "ripper-system-abstraction.systemConfig.currency.name"}}</th>
+          <th class="rsa-value" data-tooltip="{{localize "ripper-system-abstraction.systemConfig.currency.valueHint"}}">{{localize "ripper-system-abstraction.systemConfig.currency.value"}}</th>
+          <th class="rsa-where" data-tooltip="{{localize "ripper-system-abstraction.systemConfig.currency.actor.hint"}}">{{localize "ripper-system-abstraction.systemConfig.currency.where"}}</th>
+          <th class="rsa-controls"><button type="button" class="inline-control icon fa-solid fa-plus" data-action="addDenomination" data-tooltip aria-label="{{localize "ripper-system-abstraction.systemConfig.currency.add"}}"></button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each currency.rows}}
+        <tr class="rsa-denomination" data-expanded="{{this.expanded}}">
+          <td>
+            <input type="hidden" name="{{this.prefix}}.id" value="{{this.id}}">
+            <input type="hidden" name="{{this.prefix}}.adapter" value="{{#if this.adapter}}1{{/if}}">
+            <input type="hidden" name="{{this.prefix}}.abbreviation" value="{{this.abbreviation}}">
+            <input type="hidden" name="{{this.prefix}}.change" value="{{this.change}}">
+            <input type="hidden" name="{{this.prefix}}.item.source" value="{{this.item.source}}">
+            <input type="hidden" name="{{this.prefix}}.item.path" value="{{this.item.path}}">
+            <span class="rsa-system-value">{{this.systemName}}</span>
+            <input type="text" name="{{this.prefix}}.label" value="{{this.label}}" placeholder="{{this.systemName}}" data-role="coin-name">
+          </td>
+          <td class="rsa-value">
+            <span class="rsa-system-value rsa-muted">{{this.systemValue}}</span>
+            <input type="number" name="{{this.prefix}}.value" value="{{this.value}}" min="0" step="any" placeholder="{{this.valuePlaceholder}}">
+          </td>
+          <td class="rsa-where">{{#with this.actorRow}}{{> "modules/ripper-system-abstraction/templates/system-config/field.hbs" kind="actor"}}{{/with}}</td>
+          <td class="rsa-controls">
+            {{#if this.adapter}}
+            <button type="button" class="inline-control icon fa-solid fa-pen rsa-system-value" data-action="overrideDenomination" data-tooltip aria-label="{{localize "ripper-system-abstraction.systemConfig.override"}}"></button>
+            {{else}}
+            <button type="button" class="inline-control icon fa-solid fa-trash" data-action="removeDenomination" data-index="{{this.index}}" data-tooltip aria-label="{{localize "ripper-system-abstraction.systemConfig.remove"}}"></button>
+            {{/if}}
+          </td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4" class="hint">{{localize "ripper-system-abstraction.systemConfig.currency.empty"}}</td></tr>
+        {{/each}}
+      </tbody>
+    </table>
+    {{#with currency.single}}{{> "modules/ripper-system-abstraction/templates/system-config/field.hbs" kind="itemSingle"}}{{/with}}
+  </section>
+
+  <section class="tab {{tabs.checks.cssClass}}" data-tab="checks" data-group="sheet">
+    {{#if checks.systemProvided}}
+    <p class="notification info">{{localize "ripper-system-abstraction.systemConfig.checks.systemProvided"}}</p>
+    {{else}}
+    <p class="hint">{{localize "ripper-system-abstraction.systemConfig.intro.checks"}}</p>
+    {{/if}}
+    <table class="rsa-table">
+      <thead>
+        <tr>
+          <th data-needed="checks">{{localize "ripper-system-abstraction.systemConfig.checks.label"}}</th>
+          <th class="rsa-formula">{{localize "ripper-system-abstraction.systemConfig.checks.formula"}}</th>
+          <th class="rsa-controls">{{#unless checks.systemProvided}}<button type="button" class="inline-control icon fa-solid fa-plus" data-action="addCheck" data-tooltip aria-label="{{localize "ripper-system-abstraction.systemConfig.checks.add"}}"></button>{{/unless}}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each checks.rows}}
+        <tr>
+          <td>
+            <input type="hidden" name="checks.{{@index}}.id" value="{{this.id}}">
+            <input type="text" name="checks.{{@index}}.label" value="{{this.label}}" {{#if this.id}}data-tooltip="{{this.id}}"{{/if}} {{#if @root.checks.systemProvided}}disabled{{/if}}>
+          </td>
+          <td class="rsa-formula"><input type="text" name="checks.{{@index}}.formula" value="{{this.formula}}" placeholder="1d20 + @abilities.str.mod" {{#if @root.checks.systemProvided}}disabled{{/if}}></td>
+          <td class="rsa-controls">{{#unless @root.checks.systemProvided}}<button type="button" class="inline-control icon fa-solid fa-trash" data-action="removeCheck" data-index="{{@index}}" data-tooltip aria-label="{{localize "ripper-system-abstraction.systemConfig.remove"}}"></button>{{/unless}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="3" class="hint">{{localize "ripper-system-abstraction.systemConfig.checks.empty"}}</td></tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </section>
+</div>

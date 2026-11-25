@@ -1,3 +1,4 @@
+import "../scss/module.scss";
 import {initConfig} from "./config.js";
 import {showWelcome} from "./lib/welcome.js";
 import { registerSettings } from "./settings.js";
@@ -8,6 +9,9 @@ import { rollInitiative } from "./initiative.js";
 import { runAPITests } from "./testAPI.js";
 import { loadSystem } from "./systems/_index.js";
 import { registerManualConfigHooks } from "./manualConfig.js";
+import { config } from "./userConfig.js";
+import { callRegisterHook, registerRequirementHooks, requirements } from "./requirements.js";
+import "./requirementsList.js";
 
 export const MODULE_ID = "ripper-system-abstraction";
 
@@ -15,6 +19,8 @@ let resolveReady;
 
 export const API = {
     ...api,
+    config,
+    requirements,
     ready: new Promise((resolve) => (resolveReady = resolve)),
     tests: {
         buildInputs,
@@ -36,13 +42,17 @@ export const API = {
 Hooks.on("init", () => {
     registerSettings();
     registerManualConfigHooks();
+    registerRequirementHooks();
     const module = game.modules.get(MODULE_ID);
     module.API = API;
 });
 
 Hooks.on("ready", async () => {
     initConfig();
-    await loadSystem().finally(() => resolveReady(API));
+    await loadSystem().finally(() => {
+        callRegisterHook(API.requirements);
+        resolveReady(API);
+    });
 });
 
 async function openTestsDebugDialog() {

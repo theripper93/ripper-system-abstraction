@@ -4,6 +4,20 @@
             "manualConfig": {
                 "name": "Enable Manual Configuration",
                 "hint": "Adds a header button to Actor sheets that opens a form for manually setting data the game system does not provide (such as creature types). Values set this way are added to the system's own data."
+            },
+            "systemConfig": {
+                "name": "System Configuration",
+                "hint": "How the API finds data the game system adapter does not provide, configured by the GM."
+            },
+            "systemConfigMenu": {
+                "name": "System Configuration",
+                "label": "Configure System",
+                "hint": "Tell the API where to find data the game system adapter does not provide (health, items, currency, checks, ...), or override what it does provide."
+            },
+            "requirementsListMenu": {
+                "name": "Module Requirements",
+                "label": "Show Requirements",
+                "hint": "Which RSA features your modules use, and whether each one is set up."
             }
         },
         "manualConfig": {
@@ -14,7 +28,9 @@
                     "label": "Creature Types",
                     "hint": "Additional creature types for this actor, added to any type the game system already provides."
                 }
-            }
+            },
+            "currencyAmount": "{name}",
+            "empty": "Nothing to configure for this document."
         },
         "app": {},
         "flags": {},
@@ -46,7 +62,8 @@
             "DCClassVeryDifficult": "Very Difficult",
             "DCClassNearlyImpossible": "Nearly Impossible",
             "Advantage": "Advantage",
-            "Disadvantage": "Disadvantage"
+            "Disadvantage": "Disadvantage",
+            "CustomFormula": "Custom Formula"
         },
         "item": {
             "values": {
@@ -94,6 +111,243 @@
                 "skillBonus": "Skill Bonus",
                 "durability": "Durability"
             }
+        },
+        "systemConfig": {
+            "fields": {
+                "actor": {
+                    "type": {
+                        "label": "Creature Type",
+                        "hint": "Where the actor's creature type (or list of types) is stored."
+                    },
+                    "subtype": {
+                        "label": "Creature Subtype",
+                        "hint": "Where the actor's secondary classification is stored."
+                    },
+                    "size": {
+                        "label": "Size",
+                        "hint": "Where the actor's size is stored. Map each size value to grid squares in the size options."
+                    },
+                    "level": {
+                        "label": "Level",
+                        "hint": "Where the actor's level, rank or challenge rating is stored."
+                    },
+                    "role": {
+                        "label": "Role",
+                        "hint": "Where the actor's role or other system-specific classification is stored."
+                    }
+                },
+                "health": {
+                    "current": {
+                        "label": "Current Health",
+                        "hint": "Where the actor's current hit points are stored."
+                    },
+                    "maximum": {
+                        "label": "Maximum Health",
+                        "hint": "Where the actor's maximum hit points are stored."
+                    },
+                    "temporary": {
+                        "label": "Temporary Health",
+                        "hint": "Where the actor's temporary hit points are stored. Damage removes them first."
+                    },
+                    "minimum": {
+                        "label": "Minimum Health",
+                        "hint": "Where the lowest value health may drop to is stored."
+                    },
+                    "wounds": {
+                        "label": "Wounds",
+                        "hint": "Where the actor's current wounds are stored."
+                    },
+                    "maximumWounds": {
+                        "label": "Maximum Wounds",
+                        "hint": "Where the actor's maximum wounds are stored."
+                    }
+                },
+                "item": {
+                    "quantity": {
+                        "label": "Quantity",
+                        "hint": "Where the item's quantity is stored."
+                    },
+                    "weight": {
+                        "label": "Weight",
+                        "hint": "Where the weight of a single unit of the item is stored."
+                    },
+                    "equipped": {
+                        "label": "Equipped",
+                        "hint": "Where the item's equipped state is stored."
+                    },
+                    "attuned": {
+                        "label": "Attuned",
+                        "hint": "Where the item's attuned state is stored."
+                    },
+                    "uses": {
+                        "label": "Uses",
+                        "hint": "Where the item's remaining uses or charges are stored."
+                    },
+                    "maximumUses": {
+                        "label": "Maximum Uses",
+                        "hint": "Where the item's maximum uses or charges are stored."
+                    },
+                    "container": {
+                        "label": "Container",
+                        "hint": "Where the id of the container holding the item is stored."
+                    }
+                },
+                "experience": {
+                    "current": {
+                        "label": "Experience",
+                        "hint": "Where the actor's current experience points are stored."
+                    },
+                    "maximum": {
+                        "label": "Experience for Next Level",
+                        "hint": "Where the experience required for the next level is stored."
+                    }
+                }
+            },
+            "currency": {
+                "actor": {
+                    "label": "Actor Amount",
+                    "hint": "Where an actor's amount of this denomination is stored."
+                },
+                "item": {
+                    "label": "Item Price",
+                    "hint": "Where an item's price in this denomination is stored."
+                },
+                "itemSingle": {
+                    "label": "Item Price (Single Value)",
+                    "hint": "Where an item's price is stored when the system keeps one value and one denomination per item."
+                },
+                "valueHint": "Worth compared to the main coin (1 = main coin).",
+                "add": "Add Coin",
+                "handlerWarning": "This system manages actor coins itself. Mapping where actors keep any coin replaces that handling for every coin.",
+                "value": "Value",
+                "name": "Name",
+                "where": "Where actors keep it",
+                "empty": "No coins yet.",
+                "mainCoin": "Main coin",
+                "price": {
+                    "label": "Item Price",
+                    "hint": "Where items keep their price, and in which coin.",
+                    "in": "in"
+                }
+            },
+            "title": "System Configuration",
+            "tabs": {
+                "actor": "Actor",
+                "health": "Health",
+                "item": "Items",
+                "currency": "Currency",
+                "experience": "Experience",
+                "checks": "Checks"
+            },
+            "notice": {
+                "adapter": "Built-in support for {system} is loaded; fill in or override what it lacks.",
+                "noAdapter": "{system} has no built-in support: map the fields you need."
+            },
+            "onlyMissing": "Show only missing fields",
+            "missingCount": "{count} missing",
+            "override": "Override",
+            "reset": "Use the system's value",
+            "remove": "Remove",
+            "source": {
+                "path": "System path",
+                "flag": "Stored by RSA"
+            },
+            "system": {
+                "label": "System: {path}",
+                "builtIn": "built in",
+                "overrides": "Overrides system: {path}"
+            },
+            "placeholder": {
+                "none": "Path in the system data"
+            },
+            "intro": {
+                "actor": "Where actors keep their type, size, level and role.",
+                "health": "Where actors keep their health; damage and healing use these.",
+                "item": "Where items keep their quantity, weight, equipped state and uses.",
+                "experience": "Where actors keep their experience points.",
+                "currency": "The coins of the system: what each is worth and where actors keep it.",
+                "checks": "Named checks are offered in the check dialog of modules using RSA; the formula uses the actor's roll data, e.g. 1d20 + @abilities.str.mod."
+            },
+            "options": {
+                "legend": "Options",
+                "useSystem": "Use system ({value})",
+                "primary": {
+                    "label": "Main Health Track",
+                    "hint": "Which track damage and healing use when the system has both health and wounds.",
+                    "health": "Health",
+                    "wounds": "Wounds",
+                    "inferred": "automatic"
+                },
+                "invert": {
+                    "label": "Inverted Health",
+                    "hint": "Yes when the system counts damage taken upward instead of health left downward."
+                }
+            },
+            "sizes": {
+                "legend": "Sizes",
+                "system": "System sizes:",
+                "key": "Stored size value",
+                "value": "Grid squares",
+                "add": "Add Size"
+            },
+            "checks": {
+                "systemProvided": "This system's own checks are used: named checks do not apply and are kept as they are.",
+                "label": "Label",
+                "formula": "Formula",
+                "add": "Add Check",
+                "empty": "No named checks."
+            },
+            "buttons": {
+                "resetAll": "Reset All",
+                "import": "Import",
+                "export": "Export"
+            },
+            "resetAll": {
+                "title": "Reset System Configuration",
+                "content": "Clear every mapping, option, denomination and named check from the form? Nothing is saved until you press Save."
+            },
+            "notifications": {
+                "saved": "System configuration saved.",
+                "saveFailed": "The system configuration could not be saved.",
+                "imported": "Configuration imported into the form. Review it and press Save to apply it.",
+                "importEmpty": "The file contains no usable system configuration."
+            },
+            "picker": {
+                "browse": "Browse system paths",
+                "empty": "No known system paths for this document type",
+                "filter": "Filter paths",
+                "none": "No matching paths"
+            },
+            "needed": {
+                "tab": "Needed by your modules but not set up:",
+                "tabOptional": "Optional for your modules, not set up:"
+            }
+        },
+        "requirements": {
+            "neededBy": "Needed by {module}",
+            "settingsTooltip": "Needed by your modules but not set up:",
+            "ids": {
+                "currency": "Coins",
+                "checks": "Checks",
+                "itemPrice": "Item Price"
+            },
+            "optionalFor": "Optional for {module}",
+            "source": {
+                "system": "Provided by the system",
+                "flag": "Stored by RSA",
+                "path": "System path: {path}",
+                "checks": "Named checks: {checks}"
+            }
+        },
+        "requirementsList": {
+            "title": "Module Requirements",
+            "feature": "Feature",
+            "usedFor": "Used for",
+            "status": "Status",
+            "optional": "optional",
+            "undeclared": "{module}: has not declared what it uses",
+            "empty": "No active module has declared which RSA features it uses.",
+            "openSystemConfig": "Open System Configuration"
         }
     }
 }

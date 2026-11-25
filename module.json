@@ -21,7 +21,9 @@
   "esmodules": [
     "index.js"
   ],
-  "styles": [],
+  "styles": [
+    "styles/module.css"
+  ],
   "packs": [],
   "url": "https://github.com/theripper93/ripper-system-abstraction",
   "manifest": "https://github.com/theripper93/ripper-system-abstraction/releases/latest/download/module.json",

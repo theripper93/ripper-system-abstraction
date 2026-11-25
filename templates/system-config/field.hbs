@@ -1,0 +1,27 @@
+<div class="{{#unless this.compact}}form-group {{/unless}}rsa-field" data-field="{{this.fieldId}}" data-document="{{this.documentName}}" data-kind="{{this.kind}}" {{#if this.covered}}data-covered="true"{{/if}}>
+  {{#unless this.compact}}<label data-needed="{{#if this.neededId}}{{this.neededId}}{{else}}{{this.fieldId}}{{/if}}" {{#unless this.hintBelow}}data-tooltip="{{localize this.hint}}"{{/unless}}>{{localize this.label}}</label>{{/unless}}
+  <div class="form-fields rsa-summary">
+    <span class="rsa-muted" data-role="system"></span>
+    {{#unless this.compact}}<button type="button" class="rsa-override" data-action="overrideField">{{localize "ripper-system-abstraction.systemConfig.override"}}</button>{{/unless}}
+  </div>
+  <div class="form-fields rsa-editor">
+    {{#if this.flag}}
+    <select name="{{this.namePrefix}}.source" data-role="source">
+      {{selectOptions this.sourceOptions selected=this.source localize=true}}
+    </select>
+    {{else}}
+    <input type="hidden" name="{{this.namePrefix}}.source" value="path" data-role="source">
+    {{/if}}
+    <input type="text" name="{{this.namePrefix}}.path" value="{{this.path}}" data-role="path" autocomplete="off" spellcheck="false">
+    {{> "modules/ripper-system-abstraction/templates/system-config/browse.hbs" browse=this.browse}}
+    {{#if this.coins}}
+    <label class="rsa-in" for="{{this.coins.name}}">{{localize "ripper-system-abstraction.systemConfig.currency.price.in"}}</label>
+    <select name="{{this.coins.name}}" id="{{this.coins.name}}" class="rsa-coin">{{selectOptions this.coins.choices selected=this.coins.selected}}</select>
+    {{/if}}
+  </div>
+  <p class="hint rsa-overrides-note">
+    <span data-role="overrides"></span>
+    <button type="button" class="inline-control icon fa-solid fa-rotate-left" data-action="resetField" data-tooltip aria-label="{{localize "ripper-system-abstraction.systemConfig.reset"}}"></button>
+  </p>
+  {{#if this.hintBelow}}<p class="hint">{{localize this.hint}}</p>{{/if}}
+</div>

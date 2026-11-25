@@ -1,4 +1,16 @@
-import { getTestsInterface } from "./systems/_index.js";
+import { defaultTestsInterface, getTestsInterface } from "./systems/_index.js";
+
+const connectedElements = new Set();
+
+/**
+ * Re-render every connected `tests-interface` element, keeping its current
+ * values, when its inputs depend on the system configuration (the fallback
+ * tests interface with named checks).
+ */
+export function refreshTestsInterfaces() {
+  if (getTestsInterface() !== defaultTestsInterface) return;
+  for (const element of connectedElements) element.refresh();
+}
 
 /**
  * Build the DataModel classes describing the inputs required to run a check
@@ -305,8 +317,22 @@ export class TestsInterfaceElement extends HTMLElement {
 
   /** @override */
   connectedCallback() {
+    connectedElements.add(this);
     this.#render();
     if (this.hasAttribute("value")) this.#apply(this.getAttribute("value"));
+  }
+
+  /** @override */
+  disconnectedCallback() {
+    connectedElements.delete(this);
+  }
+
+  /** Rebuild the controls from the current inputs, keeping the entered values. */
+  refresh() {
+    const value = this.value;
+    this.#render();
+    this.#apply(value);
+    this.#emit();
   }
 
   /* -------------------------------------------- */

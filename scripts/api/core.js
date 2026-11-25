@@ -1,30 +1,18 @@
-import { getDataPaths } from "../systems/_index.js";
-
-const mergedCache = new WeakMap();
+import { getAdapterDataPaths } from "../systems/_index.js";
+import { effectiveDataPaths } from "../userConfig.js";
 
 /**
- * Resolve the dataPaths adapter for the world's current game system. When a
- * document is given, `dataPaths.overrides[documentName][type]` is merged over
- * the base configuration (e.g. NPC-specific paths).
+ * Resolve the effective dataPaths for the world's current game system: the
+ * adapter's base configuration, with `dataPaths.overrides[documentName][type]`
+ * merged over it when a document is given (e.g. NPC-specific paths), and the
+ * GM's user mapping applied last. Works without an adapter (empty template
+ * plus the user mapping).
  *
  * @param {Document} [document]
- * @returns {Object} The system's dataPaths configuration.
+ * @returns {Object} The effective dataPaths configuration.
  */
 export function resolveDataPaths(document) {
-  const dataPaths = getDataPaths();
-  if (!dataPaths) {
-    throw new Error(
-      `[Ripper System Abstraction] No system adapter is loaded for "${game.system.id}".`,
-    );
-  }
-  const override = dataPaths.overrides?.[document?.documentName]?.[document?.type];
-  if (!override) return dataPaths;
-
-  let cache = mergedCache.get(dataPaths);
-  if (!cache) mergedCache.set(dataPaths, (cache = new Map()));
-  const key = `${document.documentName}.${document.type}`;
-  if (!cache.has(key)) cache.set(key, foundry.utils.mergeObject(dataPaths, override, { inplace: false }));
-  return cache.get(key);
+  return effectiveDataPaths(getAdapterDataPaths(), document);
 }
 
 /**
@@ -99,7 +87,7 @@ export function setPath(document, spec, value) {
 export function executeUpdate(document, changes, options = {}) {
   if (options.update === false) return changes;
   if (!Object.keys(changes).length) return Promise.resolve(document);
-  const { afterUpdate, updateOptions } = getDataPaths() ?? {};
+  const { afterUpdate, updateOptions } = getAdapterDataPaths() ?? {};
   if (typeof afterUpdate !== "function") return document.update(changes, { ...updateOptions });
   return document.update(changes, { ...updateOptions }).then(async (result) => {
     await afterUpdate(document, changes);

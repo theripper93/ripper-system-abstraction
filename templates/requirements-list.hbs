@@ -1,0 +1,31 @@
+<div class="rsa-requirements-list scrollable">
+  {{#if this.empty}}
+  <p class="hint">{{localize "ripper-system-abstraction.requirementsList.empty"}}</p>
+  {{/if}}
+  {{#each this.modules}}
+  <section class="rsa-requirements-module">
+    <h3>{{this.title}}</h3>
+    <table class="rsa-table">
+      <thead>
+        <tr>
+          <th>{{localize "ripper-system-abstraction.requirementsList.feature"}}</th>
+          <th>{{localize "ripper-system-abstraction.requirementsList.usedFor"}}</th>
+          <th class="rsa-controls">{{localize "ripper-system-abstraction.requirementsList.status"}}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each this.rows}}
+        <tr>
+          <td>{{this.feature}}{{#if this.optional}} <span class="rsa-muted-text">{{localize "ripper-system-abstraction.requirementsList.optional"}}</span>{{/if}}</td>
+          <td>{{this.reason}}</td>
+          <td class="rsa-controls"><i class="{{this.icon}}" data-tooltip-html="{{this.tooltip}}"></i></td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </section>
+  {{/each}}
+  {{#each this.undeclared}}
+  <p class="hint">{{this}}</p>
+  {{/each}}
+</div>

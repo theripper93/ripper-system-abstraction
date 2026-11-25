@@ -297,7 +297,8 @@ export const item = {
    */
   removeFromContainer(item, options = {}) {
     const spec = itemConfig(resolveDataPaths(item)).container;
-    const changes = spec && getPath(item, spec) != null ? setPath(item, spec, null) : {};
+    const current = spec ? getPath(item, spec) : null;
+    const changes = current != null && current !== "" ? setPath(item, spec, null) : {};
     return executeUpdate(item, changes, options);
   },
 

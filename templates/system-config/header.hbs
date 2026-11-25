@@ -1,0 +1,10 @@
+<div class="rsa-config-header">
+  <p class="hint">{{this.notice}}</p>
+  <div class="form-group">
+    <label for="{{this.appId}}-only-missing">{{localize "ripper-system-abstraction.systemConfig.onlyMissing"}}</label>
+    <div class="form-fields">
+      <input type="checkbox" id="{{this.appId}}-only-missing" data-role="only-missing" {{checked this.onlyMissing}}>
+    </div>
+  </div>
+  <input type="file" accept=".json,application/json" data-role="import-file" hidden>
+</div>

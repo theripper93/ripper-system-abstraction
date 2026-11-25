@@ -1,17 +1,22 @@
 import { MODULE_ID } from "./main.js";
 import { getSetting } from "./settings.js";
+import { getFlagFields } from "./userConfig.js";
 
 const fields = foundry.data.fields;
 const { HandlebarsApplicationMixin, DocumentSheetV2 } = foundry.applications.api;
 
 /**
- * Manually configured values for data a game system does not track itself.
- * Values are stored as flags in this module's scope, keyed by field name, and
- * are combined with the system adapter's data when the API reads them.
+ * Per-document values for data a game system does not track itself, edited
+ * from a header button on Actor and Item sheets.
  *
- * To extend: add a field factory under the relevant document name. The
- * header button and form are registered automatically for every document
- * name listed here.
+ * - MANUAL_CONFIG_FIELDS (Actors, when the `manualConfig` setting is on):
+ *   stored as flags in this module's scope keyed by field name, and combined
+ *   with the system adapter's data when the API reads them.
+ * - Fields the GM mapped to "Stored by RSA" in the System Configuration
+ *   (`getFlagFields`): stored under `flags.ripper-system-abstraction.data`,
+ *   at the exact paths the API reads them from.
+ *
+ * The button appears for owners when the sheet has at least one of these.
  */
 export const MANUAL_CONFIG_FIELDS = {
   Actor: {
@@ -74,7 +79,7 @@ export class ManualConfigSheet extends HandlebarsApplicationMixin(DocumentSheetV
 
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
-    const definitions = MANUAL_CONFIG_FIELDS[this.document.documentName] ?? {};
+    const definitions = manualFieldsEnabled(this.document) ? MANUAL_CONFIG_FIELDS[this.document.documentName] ?? {} : {};
     context.fields = Object.entries(definitions).map(([key, factory]) => {
       const field = factory();
       const value = getManualConfig(this.document, key);
@@ -84,13 +89,50 @@ export class ManualConfigSheet extends HandlebarsApplicationMixin(DocumentSheetV
         value: value ?? field.getInitialValue(),
       };
     });
+    for (const entry of safeFlagFields(this.document.documentName)) {
+      const field = flagFieldFor(entry);
+      const value = foundry.utils.getProperty(this.document, entry.flagPath) ?? entry.flagDefault;
+      context.fields.push({ field, name: entry.flagPath, value: value ?? field.getInitialValue() });
+    }
     context.buttons = [{ type: "submit", icon: "fa-solid fa-floppy-disk", label: "SETTINGS.Save" }];
     return context;
   }
 }
 
+function manualFieldsEnabled(document) {
+  return !!MANUAL_CONFIG_FIELDS[document?.documentName] && getSetting("manualConfig") === true;
+}
+
+function safeFlagFields(documentName) {
+  try {
+    return getFlagFields(documentName);
+  } catch {
+    return [];
+  }
+}
+
+function flagFieldFor(entry) {
+  let label = game.i18n.localize(entry.label);
+  if (entry.denomination) {
+    const name = entry.denomination.label || entry.denomination.abbreviation || entry.denomination.id;
+    label = `${label}: ${game.i18n.localize(name)}`;
+  }
+  const options = { label, required: false };
+  switch (entry.type) {
+    case "number":
+      return new fields.NumberField({ ...options, nullable: true });
+    case "boolean":
+      return new fields.BooleanField(options);
+    case "stringList":
+      return new fields.SetField(new fields.StringField({ blank: false, trim: true }), options);
+    default:
+      return new fields.StringField({ ...options, blank: true, trim: true });
+  }
+}
+
 function canConfigure(document) {
-  return !!document?.isOwner && getSetting("manualConfig") === true;
+  if (!document?.isOwner) return false;
+  return manualFieldsEnabled(document) || safeFlagFields(document.documentName).length > 0;
 }
 
 /**
@@ -101,7 +143,7 @@ export function registerManualConfigHooks() {
   const label = `${MODULE_ID}.manualConfig.button`;
   const icon = "fa-solid fa-sliders";
 
-  for (const documentName of Object.keys(MANUAL_CONFIG_FIELDS)) {
+  for (const documentName of ["Actor", "Item"]) {
     // ApplicationV2: fires for every subclass of the base sheet.
     Hooks.on(`getHeaderControls${documentName}SheetV2`, (app, controls) => {
       if (!canConfigure(app.document)) return;
