@@ -12,7 +12,7 @@ export function registerSettings() {
     const settings = {
         manualConfig: {
             scope: "world",
-            config: true,
+            config: false,
             type: Boolean,
             default: false,
         },

@@ -62,6 +62,9 @@
 .ripper-system-abstraction-system-config .rsa-table .rsa-value {
   width: 15%;
 }
+.ripper-system-abstraction-system-config .rsa-table .rsa-abbr {
+  width: 10%;
+}
 .ripper-system-abstraction-system-config .rsa-table .rsa-where {
   width: 55%;
 }
@@ -161,6 +164,43 @@
 }
 .ripper-system-abstraction-requirements-list .rsa-muted-text {
   font-size: var(--font-size-12);
+}
+
+.ripper-system-abstraction-manual-config .rsa-legend-icon,
+.ripper-system-abstraction-manual-config .rsa-muted-text {
+  color: var(--color-text-subtle);
+}
+.ripper-system-abstraction-manual-config .rsa-muted-text {
+  font-weight: normal;
+}
+.ripper-system-abstraction-manual-config .rsa-compact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacer-8) var(--spacer-16);
+}
+.ripper-system-abstraction-manual-config .rsa-compact-field {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--spacer-4);
+  width: 6.5em;
+  color: var(--color-form-label);
+  font-size: var(--font-size-12);
+  font-weight: bold;
+  line-height: 1.2;
+}
+.ripper-system-abstraction-manual-config .rsa-compact-field:has(input[type=text]) {
+  width: 8em;
+}
+.ripper-system-abstraction-manual-config .rsa-compact-field:has(input[type=checkbox]) {
+  width: auto;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: flex-end;
+}
+.ripper-system-abstraction-manual-config .rsa-compact-field input[type=number],
+.ripper-system-abstraction-manual-config .rsa-compact-field input[type=text] {
+  width: 100%;
 }
 
 /*# sourceMappingURL=module.css.map*/

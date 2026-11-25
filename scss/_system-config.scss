@@ -81,6 +81,10 @@
       width: 15%;
     }
 
+    .rsa-abbr {
+      width: 10%;
+    }
+
     .rsa-where {
       width: 55%;
     }
@@ -208,5 +212,50 @@
 
   .rsa-muted-text {
     font-size: var(--font-size-12);
+  }
+}
+
+.ripper-system-abstraction-manual-config {
+  .rsa-legend-icon,
+  .rsa-muted-text {
+    color: var(--color-text-subtle);
+  }
+
+  .rsa-muted-text {
+    font-weight: normal;
+  }
+
+  .rsa-compact-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacer-8) var(--spacer-16);
+  }
+
+  .rsa-compact-field {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--spacer-4);
+    width: 6.5em;
+    color: var(--color-form-label);
+    font-size: var(--font-size-12);
+    font-weight: bold;
+    line-height: 1.2;
+
+    &:has(input[type="text"]) {
+      width: 8em;
+    }
+
+    &:has(input[type="checkbox"]) {
+      width: auto;
+      flex-direction: row-reverse;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+    }
   }
 }

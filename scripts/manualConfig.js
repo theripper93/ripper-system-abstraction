@@ -1,6 +1,5 @@
 import { MODULE_ID } from "./main.js";
-import { getSetting } from "./settings.js";
-import { getFlagFields } from "./userConfig.js";
+import { getFlagFields, getUserConfig, isExtraTypesEnabled } from "./userConfig.js";
 
 const fields = foundry.data.fields;
 const { HandlebarsApplicationMixin, DocumentSheetV2 } = foundry.applications.api;
@@ -9,10 +8,11 @@ const { HandlebarsApplicationMixin, DocumentSheetV2 } = foundry.applications.api
  * Per-document values for data a game system does not track itself, edited
  * from a header button on Actor and Item sheets.
  *
- * - MANUAL_CONFIG_FIELDS (Actors, when the `manualConfig` setting is on):
- *   stored as flags in this module's scope keyed by field name, and combined
- *   with the system adapter's data when the API reads them.
- * - Fields the GM mapped to "Stored by RSA" in the System Configuration
+ * - MANUAL_CONFIG_FIELDS (Actors, when "Extra creature types per actor" is
+ *   on in the System Abstraction Configuration, see `isExtraTypesEnabled`):
+ *   stored as flags in this module's scope keyed by field name, and added to
+ *   the system's own creature types when the API reads them.
+ * - Fields the GM mapped to "Stored by RSA" in the System Abstraction Configuration
  *   (`getFlagFields`): stored under `flags.ripper-system-abstraction.data`,
  *   at the exact paths the API reads them from.
  *
@@ -39,6 +39,55 @@ export function getManualConfig(document, key) {
   return document?.flags?.[MODULE_ID]?.[key];
 }
 
+const SECTIONS = [
+  { id: "actor", icon: "fa-solid fa-user" },
+  { id: "health", icon: "fa-solid fa-heart" },
+  { id: "item", icon: "fa-solid fa-box-open" },
+  { id: "currency", icon: "fa-solid fa-coins" },
+  { id: "experience", icon: "fa-solid fa-star" },
+];
+
+/**
+ * Fields sharing a group are shown as small labelled inputs on one wrapping
+ * line; fields without a group get a full-width row of their own.
+ */
+const FIELD_GROUPS = {
+  "actor.subtype": "actor",
+  "actor.size": "actor",
+  "actor.level": "actor",
+  "actor.role": "actor",
+  "health.current": "health",
+  "health.maximum": "health",
+  "health.temporary": "health",
+  "health.minimum": "health",
+  "health.wounds": "wounds",
+  "health.maximumWounds": "wounds",
+  "item.quantity": "amounts",
+  "item.weight": "amounts",
+  "item.uses": "amounts",
+  "item.maximumUses": "amounts",
+  "item.equipped": "states",
+  "item.attuned": "states",
+  "experience.current": "experience",
+  "experience.maximum": "experience",
+  "currency.actor": "coins",
+  "currency.item": "prices",
+};
+
+function groupOf(id) {
+  const [section, kind] = id.split(".");
+  return FIELD_GROUPS[id] ?? (section === "currency" ? FIELD_GROUPS[`${section}.${kind}`] : undefined) ?? null;
+}
+
+function inputHTML(field, name, value) {
+  try {
+    const input = field.toInput({ name, value });
+    return input?.outerHTML ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export class ManualConfigSheet extends HandlebarsApplicationMixin(DocumentSheetV2) {
   // Getters: MODULE_ID comes from main.js, which imports this file, so it is
   // not yet initialized when the class body is evaluated.
@@ -50,7 +99,7 @@ export class ManualConfigSheet extends HandlebarsApplicationMixin(DocumentSheetV
         icon: "fa-solid fa-sliders",
         contentClasses: ["standard-form"],
       },
-      position: { width: 480, height: "auto" },
+      position: { width: 520, height: "auto" },
       form: { closeOnSubmit: true },
     };
   }
@@ -79,28 +128,44 @@ export class ManualConfigSheet extends HandlebarsApplicationMixin(DocumentSheetV
 
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
+    const entries = [];
     const definitions = manualFieldsEnabled(this.document) ? MANUAL_CONFIG_FIELDS[this.document.documentName] ?? {} : {};
-    context.fields = Object.entries(definitions).map(([key, factory]) => {
+    for (const [key, factory] of Object.entries(definitions)) {
       const field = factory();
-      const value = getManualConfig(this.document, key);
-      return {
-        field,
-        name: `flags.${MODULE_ID}.${key}`,
-        value: value ?? field.getInitialValue(),
-      };
-    });
+      const value = getManualConfig(this.document, key) ?? field.getInitialValue();
+      const name = `flags.${MODULE_ID}.${key}`;
+      entries.push({ section: "actor", group: null, name, label: game.i18n.localize(field.label), hint: game.i18n.localize(field.hint ?? ""), input: inputHTML(field, name, value) });
+    }
     for (const entry of safeFlagFields(this.document.documentName)) {
       const field = flagFieldFor(entry);
-      const value = foundry.utils.getProperty(this.document, entry.flagPath) ?? entry.flagDefault;
-      context.fields.push({ field, name: entry.flagPath, value: value ?? field.getInitialValue() });
+      const value = foundry.utils.getProperty(this.document, entry.flagPath) ?? entry.flagDefault ?? field.getInitialValue();
+      const { label, muted } = flagFieldLabel(entry);
+      entries.push({
+        section: entry.id.split(".")[0],
+        group: groupOf(entry.id),
+        name: entry.flagPath,
+        label,
+        muted,
+        hint: game.i18n.localize(entry.label.replace(/\.label$/, ".hint")),
+        input: inputHTML(field, entry.flagPath, value),
+      });
     }
+    context.sections = SECTIONS.map(({ id, icon }) => {
+      const rows = [];
+      for (const entry of entries.filter((candidate) => candidate.section === id)) {
+        const row = entry.group && rows.find((candidate) => candidate.group === entry.group);
+        if (row) row.fields.push(entry);
+        else rows.push({ group: entry.group, compact: !!entry.group, fields: [entry] });
+      }
+      return { id, icon, label: `${MODULE_ID}.systemConfig.tabs.${id}`, rows };
+    }).filter((section) => section.rows.length);
     context.buttons = [{ type: "submit", icon: "fa-solid fa-floppy-disk", label: "SETTINGS.Save" }];
     return context;
   }
 }
 
 function manualFieldsEnabled(document) {
-  return !!MANUAL_CONFIG_FIELDS[document?.documentName] && getSetting("manualConfig") === true;
+  return !!MANUAL_CONFIG_FIELDS[document?.documentName] && isExtraTypesEnabled();
 }
 
 function safeFlagFields(documentName) {
@@ -111,13 +176,25 @@ function safeFlagFields(documentName) {
   }
 }
 
-function flagFieldFor(entry) {
-  let label = game.i18n.localize(entry.label);
+function flagFieldLabel(entry) {
   if (entry.denomination) {
     const name = entry.denomination.label || entry.denomination.abbreviation || entry.denomination.id;
-    label = `${label}: ${game.i18n.localize(name)}`;
+    return { label: game.i18n.localize(name) };
   }
-  const options = { label, required: false };
+  if (entry.id === "currency.itemSingle.value") {
+    let muted = "";
+    try {
+      const { denominations, itemSingle } = getUserConfig().currency;
+      const coin = denominations.find((candidate) => candidate.id === itemSingle.denomination);
+      if (coin) muted = `(${game.i18n.localize(coin.label || coin.id)})`;
+    } catch {}
+    return { label: game.i18n.localize(`${MODULE_ID}.manualConfig.price`), muted };
+  }
+  return { label: game.i18n.localize(entry.label) };
+}
+
+function flagFieldFor(entry) {
+  const options = { required: false };
   switch (entry.type) {
     case "number":
       return new fields.NumberField({ ...options, nullable: true });

@@ -1,17 +1,13 @@
 {
     "ripper-system-abstraction": {
         "settings": {
-            "manualConfig": {
-                "name": "Enable Manual Configuration",
-                "hint": "Adds a header button to Actor sheets that opens a form for manually setting data the game system does not provide (such as creature types). Values set this way are added to the system's own data."
-            },
             "systemConfig": {
-                "name": "System Configuration",
+                "name": "System Abstraction Configuration",
                 "hint": "How the API finds data the game system adapter does not provide, configured by the GM."
             },
             "systemConfigMenu": {
-                "name": "System Configuration",
-                "label": "Configure System",
+                "name": "System Abstraction Configuration",
+                "label": "Configure",
                 "hint": "Tell the API where to find data the game system adapter does not provide (health, items, currency, checks, ...), or override what it does provide."
             },
             "requirementsListMenu": {
@@ -22,15 +18,15 @@
         },
         "manualConfig": {
             "title": "System Abstraction Configuration",
-            "button": "System Abstraction",
+            "button": "System Abstraction Configuration",
             "fields": {
                 "creatureType": {
                     "label": "Creature Types",
                     "hint": "Additional creature types for this actor, added to any type the game system already provides."
                 }
             },
-            "currencyAmount": "{name}",
-            "empty": "Nothing to configure for this document."
+            "empty": "Nothing to configure for this document.",
+            "price": "Price"
         },
         "app": {},
         "flags": {},
@@ -205,16 +201,16 @@
             },
             "currency": {
                 "actor": {
-                    "label": "Actor Amount",
-                    "hint": "Where an actor's amount of this denomination is stored."
+                    "label": "Coin Amount",
+                    "hint": "Where actors keep their amount of this coin."
                 },
                 "item": {
                     "label": "Item Price",
-                    "hint": "Where an item's price in this denomination is stored."
+                    "hint": "Where items keep their price in this coin."
                 },
                 "itemSingle": {
-                    "label": "Item Price (Single Value)",
-                    "hint": "Where an item's price is stored when the system keeps one value and one denomination per item."
+                    "label": "Item Price",
+                    "hint": "Where items keep their price, and in which coin."
                 },
                 "valueHint": "Worth compared to the main coin (1 = main coin).",
                 "add": "Add Coin",
@@ -228,9 +224,10 @@
                     "label": "Item Price",
                     "hint": "Where items keep their price, and in which coin.",
                     "in": "in"
-                }
+                },
+                "abbreviation": "Abbr."
             },
-            "title": "System Configuration",
+            "title": "System Abstraction Configuration",
             "tabs": {
                 "actor": "Actor",
                 "health": "Health",
@@ -255,7 +252,8 @@
             "system": {
                 "label": "System: {path}",
                 "builtIn": "built in",
-                "overrides": "Overrides system: {path}"
+                "overrides": "Overrides system: {path}",
+                "adds": "Adds to system: {path}"
             },
             "placeholder": {
                 "none": "Path in the system data"
@@ -303,8 +301,8 @@
                 "export": "Export"
             },
             "resetAll": {
-                "title": "Reset System Configuration",
-                "content": "Clear every mapping, option, denomination and named check from the form? Nothing is saved until you press Save."
+                "title": "Reset System Abstraction Configuration",
+                "content": "Clear every mapping, option, coin and named check from the form? Nothing is saved until you press Save."
             },
             "notifications": {
                 "saved": "System configuration saved.",
@@ -321,7 +319,8 @@
             "needed": {
                 "tab": "Needed by your modules but not set up:",
                 "tabOptional": "Optional for your modules, not set up:"
-            }
+            },
+            "extraTypes": "Creature types are typed on each actor and added to the ones the system gives."
         },
         "requirements": {
             "neededBy": "Needed by {module}",
@@ -336,7 +335,8 @@
                 "system": "Provided by the system",
                 "flag": "Stored by RSA",
                 "path": "System path: {path}",
-                "checks": "Named checks: {checks}"
+                "checks": "Named checks: {checks}",
+                "extraTypes": "Extra types stored by RSA"
             }
         },
         "requirementsList": {
@@ -347,7 +347,7 @@
             "optional": "optional",
             "undeclared": "{module}: has not declared what it uses",
             "empty": "No active module has declared which RSA features it uses.",
-            "openSystemConfig": "Open System Configuration"
+            "openSystemConfig": "Open System Abstraction Configuration"
         }
     }
 }

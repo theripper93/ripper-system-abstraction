@@ -1,5 +1,5 @@
 import { getCurrentSystem } from "./systems/_index.js";
-import { CONFIG_FIELDS, describeAdapterField, getAdapterCurrency, getUserConfig } from "./userConfig.js";
+import { CONFIG_FIELDS, describeAdapterField, getAdapterCurrency, getUserConfig, isExtraTypesEnabled } from "./userConfig.js";
 
 const MODULE_ID = "ripper-system-abstraction";
 const I18N = `${MODULE_ID}.requirements`;
@@ -124,6 +124,7 @@ export function isRequirementSatisfied(id, config = getUserConfig()) {
       default: {
         if (!FIELD_LABELS.has(id)) return true;
         const [section, key] = id.split(".");
+        if (id === "actor.type" && isExtraTypesEnabled(config)) return true;
         return !!config?.paths?.[section]?.[key] || provided(id);
       }
     }
@@ -157,7 +158,9 @@ export function describeRequirementSource(id, config = getUserConfig()) {
       default: {
         const [section, key] = id.split(".");
         const mapped = config?.paths?.[section]?.[key];
-        return mapped ? source(mapped) : t("system");
+        const base = mapped ? source(mapped) : provided(id) ? t("system") : "";
+        if (id === "actor.type" && isExtraTypesEnabled(config)) return [base, t("extraTypes")].filter(Boolean).join(", ");
+        return base || t("system");
       }
     }
   } catch {

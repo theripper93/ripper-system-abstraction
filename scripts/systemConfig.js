@@ -1,6 +1,6 @@
 import { getAdapterDataPaths, getCurrentSystem } from "./systems/_index.js";
 import { closePathPicker, openPathPicker } from "./pathPicker.js";
-import { createWarningIcon, getMissingRequirements, neededByLines, requirementLabel } from "./requirements.js";
+import { createWarningIcon, getMissingRequirements, isRequirementSatisfied, neededByLines, requirementLabel } from "./requirements.js";
 import {
   CONFIG_FIELDS,
   CURRENCY_FIELDS,
@@ -8,6 +8,7 @@ import {
   getAdapterCurrency,
   getAdapterOptions,
   getUserConfig,
+  isExtraTypesEnabled,
   sanitizeUserConfig,
   setUserConfig,
 } from "./userConfig.js";
@@ -32,6 +33,12 @@ function isConfigured(source) {
 
 function emptySource() {
   return { source: "path", path: "" };
+}
+
+function derivedAbbreviation(label, id) {
+  const text = String(label ?? "").trim();
+  if (!text) return String(id ?? "").toUpperCase();
+  return text.split(/\s+/).filter(Boolean).map((word) => word[0]).join("");
 }
 
 function slugify(label) {
@@ -134,8 +141,9 @@ function configToDraft(config) {
     paths,
     options: {
       health: { ...config.options.health },
-      actor: { sizes: Object.entries(config.options.actor.sizes).map(([key, value]) => ({ key, value })) },
+      actor: { sizes: Object.entries(config.options.actor.sizes).map(([key, value]) => ({ key, value })), extraTypes: isExtraTypesEnabled(config) },
     },
+    keptTypePath: isExtraTypesEnabled(config) ? config.paths.actor.type?.path ?? "" : "",
     currency: {
       base: config.currency.base,
       rows,
@@ -164,7 +172,7 @@ function draftToConfig(draft) {
   return sanitizeUserConfig({
     version: 1,
     paths: draft.paths,
-    options: { health: draft.options.health, actor: { sizes } },
+    options: { health: draft.options.health, actor: { sizes, extraTypes: draft.options.actor.extraTypes === true } },
     currency: { base: deriveBase(draft, adapters), denominations, itemSingle: draft.currency.itemSingle },
     checks: draft.checks,
   });
@@ -302,8 +310,13 @@ export class SystemConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const sections = Object.fromEntries(TAB_IDS.map((id) => [id, []]));
     for (const entry of CONFIG_FIELDS) {
-      const source = foundry.utils.getProperty(draft.paths, entry.id);
-      sections[entry.section].push(fieldRow(entry.id, entry.documentName, entry.label, entry.hint, entry.flag, source, `paths.${entry.id}`));
+      let source = foundry.utils.getProperty(draft.paths, entry.id);
+      let flag = entry.flag;
+      if (entry.id === "actor.type") {
+        flag = true;
+        if (draft.options.actor.extraTypes) source = { source: "flag", path: source?.path || draft.keptTypePath || "" };
+      }
+      sections[entry.section].push(fieldRow(entry.id, entry.documentName, entry.label, entry.hint, flag, source, `paths.${entry.id}`));
     }
 
     const adapterOptions = getAdapterOptions();
@@ -325,6 +338,8 @@ export class SystemConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
         expanded: !adapter || !!(row.label || row.abbreviation || row.value != null || row.change != null || isConfigured(row.actor) || isConfigured(row.item)),
         systemName: adapter?.label ? game.i18n.localize(adapter.label) : row.id,
         systemValue: adapter ? String(adapter.value) : "",
+        systemAbbreviation: adapter ? (adapter.abbreviation ? game.i18n.localize(adapter.abbreviation) : derivedAbbreviation(adapter.label ? game.i18n.localize(adapter.label) : "", row.id)) : "",
+        abbreviationPlaceholder: adapter?.abbreviation ? game.i18n.localize(adapter.abbreviation) : derivedAbbreviation(row.label || (adapter?.label ? game.i18n.localize(adapter.label) : ""), row.id),
         valuePlaceholder: adapter ? String(adapter.value) : "1",
         actorRow: { ...fieldRow(`currency.actor.${row.id}`, "Actor", CURRENCY_FIELDS.actor.label, CURRENCY_FIELDS.actor.hint, CURRENCY_FIELDS.actor.flag, row.actor, `${prefix}.actor`), compact: true },
       };
@@ -404,6 +419,10 @@ export class SystemConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   #onInput(event) {
     const target = event.target;
+    if (target.dataset.role === "coin-name") {
+      const abbreviation = target.closest(".rsa-denomination")?.querySelector('[data-role="coin-abbreviation"]');
+      if (abbreviation && !abbreviation.dataset.system) abbreviation.placeholder = derivedAbbreviation(target.value || target.placeholder, "");
+    }
     if (target.dataset.role === "denomination-id") {
       const denomination = target.closest(".rsa-denomination");
       const id = target.value.trim();
@@ -438,11 +457,16 @@ export class SystemConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (denomination.querySelector('.rsa-field[data-status="missing"]')) denomination.dataset.expanded = "true";
     }
     this.#markRequirements(form);
+    let coinsMissing = false;
+    try {
+      coinsMissing = !isRequirementSatisfied("currency", draftToConfig(this.#readForm()));
+    } catch {}
     for (const tab of TAB_IDS) {
       const section = form.querySelector(`section.tab[data-tab="${tab}"]`);
       const link = form.querySelector(`nav.tabs [data-tab="${tab}"]`);
       if (!section || !link) continue;
-      const count = section.querySelectorAll('.rsa-field[data-status="missing"]').length;
+      let count = section.querySelectorAll('.rsa-field[data-status="missing"]').length;
+      if (tab === "currency" && coinsMissing) count += 1 - section.querySelectorAll('.rsa-denomination .rsa-field[data-status="missing"]').length;
       let badge = link.querySelector(".rsa-missing-count");
       if (!count) {
         badge?.remove();
@@ -511,7 +535,12 @@ export class SystemConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
       this.#setStatus(row, provided ? (configured ? "overridden" : "provided") : configured ? "configured" : "missing");
       for (const element of row.querySelectorAll('[data-role="system"]')) element.textContent = format("system.label", { path: system });
       const overrides = row.querySelector('[data-role="overrides"]');
-      if (overrides) overrides.textContent = format("system.overrides", { path: system });
+      const adds = fieldId === "actor.type" && source === "flag";
+      if (overrides) overrides.textContent = format(adds ? "system.adds" : "system.overrides", { path: system });
+      if (fieldId === "actor.type") {
+        const label = row.querySelector(":scope > label");
+        if (label) label.dataset.tooltip = adds ? localize("extraTypes") : game.i18n.localize(CONFIG_FIELDS.find((entry) => entry.id === "actor.type")?.hint ?? "");
+      }
     } catch (err) {
       console.warn("[Ripper System Abstraction] Could not refresh a configuration row:", err);
     }
@@ -543,6 +572,10 @@ export class SystemConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const paths = {};
     for (const entry of CONFIG_FIELDS) foundry.utils.setProperty(paths, entry.id, source(foundry.utils.getProperty(data.paths ?? {}, entry.id)));
+    const typeRow = paths.actor.type;
+    const extraTypes = typeRow.source === "flag";
+    const keptTypePath = this.#draft.keptTypePath ?? "";
+    paths.actor.type = { source: "path", path: extraTypes ? keptTypePath : typeRow.path };
 
     const invert = data.options?.health?.invert;
     const rows = assignIds(Object.values(data.currency?.denominations ?? {}).map((row) => ({
@@ -562,9 +595,10 @@ export class SystemConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     return {
       paths,
+      keptTypePath,
       options: {
         health: { primary: text(data.options?.health?.primary), invert: invert === "true" ? true : invert === "false" ? false : null },
-        actor: { sizes: Object.values(data.options?.actor?.sizes ?? {}).map((row) => ({ key: text(row.key), value: number(row.value) })) },
+        actor: { sizes: Object.values(data.options?.actor?.sizes ?? {}).map((row) => ({ key: text(row.key), value: number(row.value) })), extraTypes },
       },
       currency: {
         base: text(data.currency?.base),

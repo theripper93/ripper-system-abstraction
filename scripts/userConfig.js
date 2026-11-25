@@ -138,7 +138,8 @@ function sanitizeOptions(options) {
   for (const [key, value] of Object.entries(isObject(options?.actor?.sizes) ? options.actor.sizes : {})) {
     if (key && typeof value === "number" && Number.isFinite(value) && value > 0) sizes[key] = value;
   }
-  return { health: { primary, invert }, actor: { sizes } };
+  const extraTypes = typeof options?.actor?.extraTypes === "boolean" ? options.actor.extraTypes : null;
+  return { health: { primary, invert }, actor: { sizes, extraTypes } };
 }
 
 function sanitizeDenomination(value, seen) {
@@ -264,6 +265,25 @@ export async function clearUserConfig() {
 export function invalidateUserConfig() {
   cachedConfig = null;
   cacheVersion++;
+}
+
+/**
+ * Whether RSA adds per-actor creature types (stored in the
+ * `flags.ripper-system-abstraction.creatureType` flag) to the system's own
+ * types. The explicit `options.actor.extraTypes` wins; when it is unset the
+ * legacy `manualConfig` world setting decides.
+ *
+ * @param {Object} [config] Defaults to the stored configuration.
+ * @returns {boolean}
+ */
+export function isExtraTypesEnabled(config = getUserConfig()) {
+  const explicit = config?.options?.actor?.extraTypes;
+  if (typeof explicit === "boolean") return explicit;
+  try {
+    return game.settings.get(MODULE_ID, "manualConfig") === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -557,4 +577,5 @@ export const config = {
   getAdapterCurrency,
   getAdapterOptions,
   readFieldValue,
+  isExtraTypesEnabled,
 };

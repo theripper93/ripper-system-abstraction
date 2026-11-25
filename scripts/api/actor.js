@@ -1,5 +1,6 @@
 import { resolveDataPaths, getPath } from "./core.js";
 import { getManualConfig } from "../manualConfig.js";
+import { getUserConfig, isExtraTypesEnabled } from "../userConfig.js";
 
 function actorConfig(dp) {
   return dp.actor ?? {};
@@ -39,13 +40,16 @@ export const actor = {
    */
   getTypes(actor) {
     const types = toList(getPath(actor, actorConfig(resolveDataPaths(actor)).type));
-    const manual = toList(getManualConfig(actor, "creatureType"));
+    const manual = isExtraTypesEnabled() ? toList(getManualConfig(actor, "creatureType")) : [];
     return [...new Set([...types, ...manual])];
   },
 
   /**
    * Every creature/entity type declared by the game system, independent of
-   * any Actor, plus any type manually configured on a world Actor.
+   * any Actor: the adapter's choices, then (when the GM mapped the creature
+   * type to a system path) the distinct values world Actors hold at that
+   * path, read at call time, then the extra types stored by RSA on world
+   * Actors (when enabled).
    *
    * @returns {{id: string, label: string}[]}
    */
@@ -53,12 +57,27 @@ export const actor = {
     const choices = evaluate(actorConfig(resolveDataPaths()).typeChoices) ?? {};
     const types = Object.entries(choices).map(([id, label]) => ({ id, label: localizeLabel(label) || id }));
     const known = new Set(types.map((type) => type.id));
-    for (const actor of game.actors ?? []) {
-      for (const id of toList(getManualConfig(actor, "creatureType"))) {
-        if (known.has(id)) continue;
-        known.add(id);
-        types.push({ id, label: id });
+    let mapped = false;
+    try {
+      mapped = !!getUserConfig().paths.actor.type;
+    } catch {}
+    const extras = isExtraTypesEnabled();
+    const pathValues = [];
+    const stored = [];
+    if (mapped || extras) {
+      for (const actor of game.actors ?? []) {
+        if (mapped) {
+          try {
+            pathValues.push(...toList(getPath(actor, actorConfig(resolveDataPaths(actor)).type)));
+          } catch {}
+        }
+        if (extras) stored.push(...toList(getManualConfig(actor, "creatureType")));
       }
+    }
+    for (const id of [...pathValues, ...stored]) {
+      if (known.has(id)) continue;
+      known.add(id);
+      types.push({ id, label: id });
     }
     return types;
   },

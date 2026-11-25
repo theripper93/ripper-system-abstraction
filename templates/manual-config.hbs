@@ -1,5 +1,26 @@
-<div class="form-body">
-  {{#each fields}}
-    {{formGroup field name=name value=value localize=true}}
+<div class="form-body standard-form">
+  {{#each this.sections}}
+  <fieldset class="rsa-manual-section">
+    <legend><i class="{{this.icon}} rsa-legend-icon" inert></i> {{localize this.label}}</legend>
+    {{#each this.rows}}
+    {{#if this.compact}}
+    <div class="rsa-compact-row">
+      {{#each this.fields}}
+      <label class="rsa-compact-field">
+        <span {{#if this.hint}}data-tooltip="{{this.hint}}"{{/if}}>{{this.label}}{{#if this.muted}} <span class="rsa-muted-text">{{this.muted}}</span>{{/if}}</span>
+        {{{this.input}}}
+      </label>
+      {{/each}}
+    </div>
+    {{else}}
+    {{#each this.fields}}
+    <div class="form-group">
+      <label {{#if this.hint}}data-tooltip="{{this.hint}}"{{/if}}>{{this.label}}{{#if this.muted}} <span class="rsa-muted-text">{{this.muted}}</span>{{/if}}</label>
+      <div class="form-fields">{{{this.input}}}</div>
+    </div>
+    {{/each}}
+    {{/if}}
+    {{/each}}
+  </fieldset>
   {{/each}}
 </div>
