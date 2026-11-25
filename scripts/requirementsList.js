@@ -23,7 +23,8 @@ function featureLabel(id) {
 
 function dependsOnRsa(module) {
   try {
-    return Array.from(module.relationships?.requires ?? []).some((entry) => entry?.id === MODULE_ID);
+    const related = [...Array.from(module.relationships?.requires ?? []), ...Array.from(module.relationships?.recommends ?? [])];
+    return related.some((entry) => entry?.id === MODULE_ID);
   } catch {
     return false;
   }
